@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { loginAdmin } from '@/app/admin/actions'
 
+export const dynamic = 'force-dynamic'
+
 export default function AdminLoginPage() {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
