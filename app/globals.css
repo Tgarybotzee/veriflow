@@ -46,7 +46,7 @@
 
 :root {
   color-scheme: dark;
-  --background: oklch(0.13 0.02 250);
+  --background: oklch(0.105 0.025 258);
   --foreground: oklch(0.96 0.015 240);
   --card: oklch(0.18 0.025 250);
   --card-foreground: oklch(0.96 0.015 240);
@@ -83,5 +83,9 @@
 @layer base {
   * { @apply border-border outline-ring/50; }
   html { background: var(--background); }
-  body { @apply bg-background text-foreground font-sans; }
+  body {
+    @apply bg-background text-foreground font-sans;
+    background-image: radial-gradient(circle at 85% -10%, oklch(0.34 0.16 285 / 0.22), transparent 34rem), radial-gradient(circle at 30% 55%, oklch(0.3 0.12 210 / 0.08), transparent 28rem);
+    background-attachment: fixed;
+  }
 }
