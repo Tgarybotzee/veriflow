@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Activity, BarChart3, Bell, ChevronRight, FileText, Globe2, LayoutDashboard, LockKeyhole, Megaphone, Menu, Save, Settings2, ShieldCheck, Users, X } from 'lucide-react'
+import { Activity, BarChart3, ChevronRight, FileText, Globe2, LayoutDashboard, LockKeyhole, Megaphone, Menu, Save, Settings2, ShieldCheck, Users, X, LogOut } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { savePopupCampaign, updateSiteContent, logoutAdmin } from './actions'
 
 type Section = 'overview' | 'popups' | 'users' | 'traffic' | 'logs' | 'layout'
 
@@ -21,32 +22,220 @@ const nav: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'layout', label: 'Header & footer', icon: Settings2 },
 ]
 
-export default function AdminPage() {
+export default function AdminPageClient({ initialData, sessionEmail }: { initialData: any, sessionEmail: string }) {
   const [section, setSection] = useState<Section>('overview')
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [saved, setSaved] = useState(false)
 
-  return <main className="min-h-screen bg-slate-100 text-slate-950">
-    <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6">
-      <div className="flex items-center gap-3"><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle admin navigation">{mobileOpen ? <X /> : <Menu />}</Button><div className="flex size-9 items-center justify-center rounded-lg bg-blue-700 text-white"><ShieldCheck className="size-5" /></div><div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-blue-700">Signal Console</p><p className="font-semibold">Admin control center</p></div></div>
-      <div className="flex items-center gap-3"><Badge className="hidden bg-amber-100 text-amber-900 hover:bg-amber-100 sm:inline-flex"><span className="mr-1.5 size-1.5 rounded-full bg-amber-600" />Setup required</Badge><Button variant="outline" size="sm" onClick={() => window.location.href = '/'}>View monitor <ChevronRight data-icon="inline-end" /></Button></div>
-    </header>
-    <div className="mx-auto flex max-w-[1600px]">
-      <aside className={`${mobileOpen ? 'flex' : 'hidden'} absolute inset-x-0 top-16 z-10 flex-col border-b border-slate-200 bg-white p-4 lg:static lg:flex lg:min-h-[calc(100vh-4rem)] lg:w-64 lg:border-b-0 lg:border-r lg:p-5`}><div className="mb-6 rounded-xl bg-blue-50 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-blue-900"><LockKeyhole className="size-4" />Admin workspace</div><p className="mt-2 text-xs leading-5 text-blue-800">Manage content, access, and platform health from one place.</p></div><nav className="flex flex-col gap-1" aria-label="Admin sections">{nav.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { setSection(id); setMobileOpen(false) }} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${section === id ? 'bg-blue-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'}`}><Icon className="size-4" />{label}</button>)}</nav><Separator className="my-6" /><p className="px-3 text-xs leading-5 text-slate-500">Role management and audit history should always be enforced server-side.</p></aside>
-      <section className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8"><div className="mb-7"><p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Administration</p><h1 className="mt-1 text-3xl font-bold tracking-tight">{nav.find((item) => item.id === section)?.label}</h1><p className="mt-2 text-sm text-slate-600">Control the public experience and review platform activity.</p></div>{section === 'overview' && <Overview />}{section === 'popups' && <PopupEditor onSave={() => { setSaved(true); window.setTimeout(() => setSaved(false), 2200) }} saved={saved} />}{section === 'users' && <UsersPanel />}{section === 'traffic' && <TrafficPanel />}{section === 'logs' && <LogsPanel />}{section === 'layout' && <LayoutPanel onSave={() => { setSaved(true); window.setTimeout(() => setSaved(false), 2200) }} saved={saved} />}</section>
-    </div>
-  </main>
+  return (
+    <main className="min-h-screen bg-slate-50 text-slate-950">
+      <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
+            {mobileOpen ? <X /> : <Menu />}
+          </Button>
+          <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white">
+            <ShieldCheck className="size-5" />
+          </div>
+          <div>
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-blue-600">Signal Console</p>
+            <p className="font-semibold text-sm">Admin control center</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-xs font-medium text-slate-500 sm:inline-block">{sessionEmail}</span>
+          <Button variant="outline" size="sm" onClick={() => window.location.href = '/'}>
+            View monitor <ChevronRight className="ml-1 size-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => logoutAdmin()}>
+            <LogOut className="size-4 text-slate-600" />
+          </Button>
+        </div>
+      </header>
+
+      <div className="mx-auto flex max-w-[1600px]">
+        <aside className={`${mobileOpen ? 'flex' : 'hidden'} absolute inset-x-0 top-16 z-10 flex-col border-b border-slate-200 bg-white p-4 shadow-xl lg:static lg:flex lg:min-h-[calc(100vh-4rem)] lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none`}>
+          <nav className="flex flex-col gap-1">
+            {nav.map(({ id, label, icon: Icon }) => (
+              <button 
+                key={id} 
+                onClick={() => { setSection(id); setMobileOpen(false) }} 
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${section === id ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+              >
+                <Icon className="size-4" />{label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <section className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          <div className="mb-7">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{nav.find((item) => item.id === section)?.label}</h1>
+          </div>
+          {section === 'overview' && <Overview data={initialData} />}
+          {section === 'popups' && <PopupEditor />}
+          {section === 'users' && <UsersPanel />}
+          {section === 'traffic' && <TrafficPanel />}
+          {section === 'logs' && <LogsPanel logs={initialData.logs} />}
+          {section === 'layout' && <LayoutPanel />}
+        </section>
+      </div>
+    </main>
+  )
 }
 
-function Overview() { return <><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[['Total users','12,842','+8.4% this month',Users],['Active today','2,184','+12.1% vs yesterday',Activity],['Page views','48,390','+5.7% this week',Globe2],['Popup CTR','6.8%','+1.2% this month',Megaphone]].map(([label, value, trend, Icon]) => <Card key={String(label)} className="border-slate-200 shadow-sm"><CardHeader className="flex flex-row items-center justify-between pb-2"><CardDescription className="font-medium text-slate-600">{label}</CardDescription><Icon className="size-4 text-blue-700" /></CardHeader><CardContent><p className="text-3xl font-bold tracking-tight">{value}</p><p className="mt-1 text-xs font-medium text-emerald-700">{trend}</p></CardContent></Card>)}</div><div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Platform health</CardTitle><CardDescription>Live operational summary</CardDescription></CardHeader><CardContent className="grid gap-3 sm:grid-cols-3">{[['API availability','99.98%','Healthy'],['Messages today','8,429','Receiving'],['Open campaigns','3','Published']].map(([a,b,c]) => <div key={a} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-medium text-slate-500">{a}</p><p className="mt-2 text-xl font-bold">{b}</p><p className="mt-1 text-xs text-emerald-700">{c}</p></div>)}</CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Recent activity</CardTitle><CardDescription>Latest admin events</CardDescription></CardHeader><CardContent className="flex flex-col gap-3 text-sm">{['Popup campaign published','Moderator role updated','Footer copy saved'].map((item, i) => <div key={item} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0"><span>{item}</span><span className="text-xs text-slate-500">{i + 2}m ago</span></div>)}</CardContent></Card></div></> }
+function Overview({ data }: { data: any }) { 
+  return (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription className="font-medium text-slate-600">Total Campaigns</CardDescription>
+            <Megaphone className="size-4 text-blue-600" />
+          </CardHeader>
+          <CardContent><p className="text-3xl font-bold">{data.campaigns.total}</p></CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription className="font-medium text-slate-600">Active Campaigns</CardDescription>
+            <Activity className="size-4 text-blue-600" />
+          </CardHeader>
+          <CardContent><p className="text-3xl font-bold">{data.campaigns.active}</p></CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription className="font-medium text-slate-600">Impressions</CardDescription>
+            <Globe2 className="size-4 text-blue-600" />
+          </CardHeader>
+          <CardContent><p className="text-3xl font-bold">{data.stats.impressions}</p></CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription className="font-medium text-slate-600">Clicks</CardDescription>
+            <BarChart3 className="size-4 text-blue-600" />
+          </CardHeader>
+          <CardContent><p className="text-3xl font-bold">{data.stats.clicks}</p></CardContent>
+        </Card>
+      </div>
+    </>
+  ) 
+}
 
-function PopupEditor({ onSave, saved }: { onSave: () => void; saved: boolean }) { return <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Create popup campaign</CardTitle><CardDescription>Add a Telegram join prompt, announcement, or promotional message.</CardDescription></CardHeader><CardContent className="flex flex-col gap-5"><label className="flex flex-col gap-2 text-sm font-semibold">Campaign title<Input placeholder="Join our Telegram community" /></label><label className="flex flex-col gap-2 text-sm font-semibold">Message<Textarea className="min-h-28" placeholder="Get updates, support, and exclusive alerts." /></label><label className="flex flex-col gap-2 text-sm font-semibold">External image URL<Input type="url" placeholder="https://example.com/banner.jpg" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-semibold">Primary button label<Input placeholder="Join Telegram" /></label><label className="flex flex-col gap-2 text-sm font-semibold">Primary button URL<Input type="url" placeholder="https://t.me/yourchannel" /></label></div><div className="flex items-center justify-between rounded-lg bg-slate-50 p-3"><span className="text-sm font-medium">Publish immediately</span><input type="checkbox" className="size-4 accent-blue-700" defaultChecked /></div><Button onClick={onSave} className="w-fit bg-blue-700 hover:bg-blue-800"><Save data-icon="inline-start" />Save campaign</Button>{saved && <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900"><AlertTitle>Campaign saved</AlertTitle><AlertDescription>Connect the admin API to persist this campaign for all users.</AlertDescription></Alert>}</CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Live preview</CardTitle><CardDescription>High-contrast public popup</CardDescription></CardHeader><CardContent><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg"><div className="h-32 bg-slate-200" /><div className="flex flex-col gap-3 p-5"><Badge className="w-fit bg-blue-100 text-blue-800 hover:bg-blue-100">Announcement</Badge><p className="text-lg font-bold">Join our Telegram community</p><p className="text-sm leading-6 text-slate-600">Get updates, support, and exclusive alerts.</p><Button className="bg-blue-700 hover:bg-blue-800">Join Telegram</Button></div></div></CardContent></Card></div> }
+function PopupEditor() { 
+  const [saved, setSaved] = useState(false)
+  const [pending, setPending] = useState(false)
 
-function UsersPanel() { return <Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>User management</CardTitle><CardDescription>Review accounts, roles, access, and moderation status.</CardDescription></CardHeader><CardContent><div className="mb-4 flex gap-3"><Input placeholder="Search users by email or ID" /><Button variant="outline">Export CSV</Button></div><div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><tr><th className="p-3">User</th><th className="p-3">Role</th><th className="p-3">Status</th><th className="p-3">Last active</th></tr></thead><tbody>{[['user_8f21','Member','Active','2 min ago'],['mod_21ac','Moderator','Active','18 min ago'],['user_44d0','Member','Suspended','1 day ago']].map((row) => <tr key={row[0]} className="border-b border-slate-100"><td className="p-3 font-mono text-xs">{row[0]}</td><td className="p-3">{row[1]}</td><td className="p-3"><Badge variant="outline" className={row[2] === 'Active' ? 'border-emerald-200 text-emerald-700' : 'border-rose-200 text-rose-700'}>{row[2]}</Badge></td><td className="p-3 text-slate-500">{row[3]}</td></tr>)}</tbody></table></div></CardContent></Card> }
+  async function handleSubmit(formData: FormData) {
+    setPending(true)
+    try {
+      await savePopupCampaign(formData)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (e) {
+      alert("Failed to save campaign")
+    } finally {
+      setPending(false)
+    }
+  }
 
-function TrafficPanel() { return <div className="grid gap-6 lg:grid-cols-2"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Traffic overview</CardTitle><CardDescription>Visitors and message activity</CardDescription></CardHeader><CardContent className="flex h-64 items-end gap-3">{[38,55,42,68,63,82,74,91,78,96,86,100].map((height, i) => <div key={i} className="flex flex-1 flex-col justify-end gap-2"><div className="rounded-t bg-blue-600" style={{ height: `${height}%` }} /><span className="text-center text-[10px] text-slate-500">{i + 1}</span></div>)}</CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Top entry pages</CardTitle><CardDescription>Where users arrive from</CardDescription></CardHeader><CardContent className="flex flex-col gap-4">{[['/monitor','62%'],['/admin','14%'],['/help','9%'],['/status','6%']].map(([page, value]) => <div key={page} className="flex items-center justify-between"><span className="font-mono text-sm">{page}</span><span className="font-semibold text-blue-700">{value}</span></div>)}</CardContent></Card></div> }
+  return (
+    <Card className="border-slate-200 shadow-sm max-w-3xl">
+      <CardHeader>
+        <CardTitle>Create popup campaign</CardTitle>
+        <CardDescription>Deploy a new notification to your users.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={handleSubmit} className="flex flex-col gap-5">
+          <label className="flex flex-col gap-2 text-sm font-semibold">Campaign title
+            <Input name="title" required placeholder="Join our Telegram community" />
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-semibold">Message
+            <Textarea name="message" required className="min-h-28" placeholder="Get updates, support, and exclusive alerts." />
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-semibold">External image URL
+            <Input name="imageUrl" type="url" placeholder="https://example.com/banner.jpg" />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-semibold">Primary button label
+              <Input name="ctaText" placeholder="Join Telegram" />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold">Primary button URL
+              <Input name="ctaLink" type="url" placeholder="https://t.me/yourchannel" />
+            </label>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+            <input type="checkbox" name="isActive" id="isActive" className="size-4 accent-blue-600" defaultChecked />
+            <label htmlFor="isActive" className="text-sm font-medium cursor-pointer">Publish immediately</label>
+          </div>
+          <Button disabled={pending} type="submit" className="w-fit bg-blue-600 hover:bg-blue-700">
+            <Save className="mr-2 size-4" /> {pending ? 'Saving...' : 'Save campaign'}
+          </Button>
+          {saved && <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900 mt-4"><AlertTitle>Campaign Saved</AlertTitle><AlertDescription>Your campaign has been successfully written to the database.</AlertDescription></Alert>}
+        </form>
+      </CardContent>
+    </Card>
+  ) 
+}
 
-function LogsPanel() { return <Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Activity logs</CardTitle><CardDescription>Immutable audit trail for sensitive actions.</CardDescription></CardHeader><CardContent className="flex flex-col gap-3">{['Popup campaign draft created','Header content updated','Moderator invited','User session revoked','Traffic report exported'].map((item, i) => <div key={item} className="flex flex-col gap-1 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><FileText className="size-4 text-blue-700" /><span className="font-medium">{item}</span></div><span className="text-xs text-slate-500">admin@signal.local · {i + 4} minutes ago</span></div>)}</CardContent></Card> }
+function LogsPanel({ logs }: { logs: any[] }) { 
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <CardTitle>Activity logs</CardTitle>
+        <CardDescription>Immutable audit trail for sensitive actions.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {logs.length === 0 && <p className="text-sm text-slate-500">No logs found in the database.</p>}
+        {logs.map((log) => (
+          <div key={log.id} className="flex flex-col gap-1 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between bg-white">
+            <div className="flex items-center gap-3">
+              <FileText className="size-4 text-blue-600" />
+              <span className="font-medium text-sm">{log.action}</span>
+            </div>
+            <span className="text-xs text-slate-500">{log.admin_email} &middot; {new Date(log.created_at).toLocaleString()}</span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  ) 
+}
 
-function LayoutPanel({ onSave, saved }: { onSave: () => void; saved: boolean }) { return <div className="grid gap-6 lg:grid-cols-2"><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Header manager</CardTitle><CardDescription>Control navigation copy and primary links.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><label className="flex flex-col gap-2 text-sm font-semibold">Brand label<Input defaultValue="Signal Console" /></label><label className="flex flex-col gap-2 text-sm font-semibold">Announcement bar<Textarea defaultValue="Service status: all systems operational" /></label><Button onClick={onSave} className="w-fit bg-blue-700 hover:bg-blue-800"><Save data-icon="inline-start" />Save header</Button></CardContent></Card><Card className="border-slate-200 shadow-sm"><CardHeader><CardTitle>Footer manager</CardTitle><CardDescription>Manage support links and legal copy.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><label className="flex flex-col gap-2 text-sm font-semibold">Footer message<Textarea defaultValue="Secure monitoring for your connected devices." /></label><label className="flex flex-col gap-2 text-sm font-semibold">Support URL<Input type="url" defaultValue="https://example.com/support" /></label><Button onClick={onSave} variant="outline" className="w-fit"><Save data-icon="inline-start" />Save footer</Button></CardContent></Card>{saved && <Alert className="lg:col-span-2 border-emerald-200 bg-emerald-50 text-emerald-900"><AlertTitle>Layout settings saved</AlertTitle><AlertDescription>Connect the admin API to publish these settings globally.</AlertDescription></Alert>}</div> }
+function LayoutPanel() { 
+  const [saved, setSaved] = useState(false)
+  const [pending, setPending] = useState(false)
 
+  async function handleSubmit(formData: FormData) {
+    setPending(true)
+    const data = { brand: formData.get('brand'), announcement: formData.get('announcement') }
+    await updateSiteContent('header_config', data)
+    setSaved(true)
+    setPending(false)
+    setTimeout(() => setSaved(false), 3000)
+  }
+
+  return (
+    <Card className="border-slate-200 shadow-sm max-w-2xl">
+      <CardHeader>
+        <CardTitle>Header manager</CardTitle>
+        <CardDescription>Control navigation copy and primary links.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={handleSubmit} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-2 text-sm font-semibold">Brand label
+            <Input name="brand" defaultValue="Signal Console" />
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-semibold">Announcement bar
+            <Textarea name="announcement" defaultValue="Service status: all systems operational" />
+          </label>
+          <Button disabled={pending} type="submit" className="w-fit bg-blue-600 hover:bg-blue-700">
+            <Save className="mr-2 size-4" /> Save Configuration
+          </Button>
+          {saved && <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900 mt-2"><AlertTitle>Saved</AlertTitle><AlertDescription>Settings updated in database.</AlertDescription></Alert>}
+        </form>
+      </CardContent>
+    </Card>
+  ) 
+}
+
+// Stubs for currently unimplemented database tables
+function UsersPanel() { return <Card><CardContent className="pt-6"><p className="text-sm text-slate-500">Users table logic pending backend implementation.</p></CardContent></Card> }
+function TrafficPanel() { return <Card><CardContent className="pt-6"><p className="text-sm text-slate-500">Traffic table logic pending backend implementation.</p></CardContent></Card> }
