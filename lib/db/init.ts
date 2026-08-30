@@ -3,11 +3,9 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 
-if (!process.env.NEON_DATABASE_URL) {
-  throw new Error('NEON_DATABASE_URL must be set in environment');
-}
-
-const sql = neon(process.env.NEON_DATABASE_URL);
+const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+if (!databaseUrl) throw new Error('DATABASE_URL must be set in environment');
+const sql = neon(databaseUrl);
 
 let initialized = false;
 

@@ -90,11 +90,13 @@ export async function getAdminOverviewMetrics() {
   }
 
   // gather metrics
-  const [adminCountRows, campaignsRows, statsRows, logsRows] = await Promise.all([
+  const [adminCountRows, campaignsRows, statsRows, logsRows, trafficRows, usersRows] = await Promise.all([
     db`SELECT COUNT(*)::int AS total_users FROM admin_users`,
-    db`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active) ::int AS active FROM popup_campaigns`,
+    db`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active)::int AS active FROM popup_campaigns`,
     db`SELECT COALESCE(SUM(impressions),0)::int AS impressions, COALESCE(SUM(clicks),0)::int AS clicks FROM popup_campaigns`,
-    db`SELECT id, admin_email, action, details, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 20`,
+    db`SELECT id, admin_email, action, details, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 50`,
+    db`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int AS last_24h, COUNT(*) FILTER (WHERE event_type = 'page_view')::int AS page_views FROM traffic_events`,
+    db`SELECT id, email, role, created_at FROM admin_users ORDER BY created_at DESC LIMIT 25`,
   ])
 
   let live = { code: process.env.VERIFLOW_DB_CODE || DEFAULT_DB_CODE, devices: [], messages: [], error: null }
@@ -110,6 +112,9 @@ export async function getAdminOverviewMetrics() {
     campaigns: campaignsRows[0],
     stats: statsRows[0],
     logs: logsRows,
+    users: usersRows,
+    traffic: trafficRows[0] ?? { total: 0, last_24h: 0, page_views: 0 },
+    fetchedAt: new Date().toISOString(),
     live,
   }
 }

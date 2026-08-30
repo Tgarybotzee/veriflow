@@ -92,4 +92,10 @@ export function getCookieFromHeader(cookieHeader?: string | null) {
   return null;
 }
 
+export async function getAdminSession() {
+  const jar = await cookies()
+  const result = await verifySession(jar.get(ADMIN_COOKIE_NAME)?.value)
+  return result?.user ?? null
+}
+
 export { ADMIN_COOKIE_NAME };
