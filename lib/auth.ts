@@ -1,3 +1,4 @@
+// lib/auth.ts
 import { sql, ensureInit } from './db/init';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
@@ -5,6 +6,7 @@ import { randomUUID } from 'crypto';
 
 const ADMIN_COOKIE_NAME = 'veriflow_admin_token';
 
+// Ensure DB is initialised once.
 await ensureInit();
 
 export type AdminUser = {
@@ -23,62 +25,135 @@ export async function verifyPassword(password: string, hash: string) {
 }
 
 export async function authenticateAdmin(email: string, password: string) {
-  const rows = await sql`SELECT id, email, role, password_hash FROM admin_users WHERE lower(email) = lower(${email}) LIMIT 1`;
-  const row = rows[0] as any;
-  if (!row) return null;
-  const ok = await verifyPassword(password, row.password_hash as string);
-  if (!ok) return null;
-  return { id: row.id as number, email: row.email as string, role: row.role as string } as AdminUser;
+  try {
+    const rows = await sql`
+      SELECT id, email, role, password_hash
+      FROM admin_users
+      WHERE lower(email) = lower(${email})
+      LIMIT 1
+    `;
+    const row = rows[0] as any;
+    if (!row) return null;
+
+    const ok = await verifyPassword(password, row.password_hash as string);
+    if (!ok) return null;
+
+    return {
+      id: row.id as number,
+      email: row.email as string,
+      role: row.role as string,
+    } as AdminUser;
+  } catch (err) {
+    console.error('[auth] authenticateAdmin failed:', err);
+    return null;
+  }
 }
 
 export async function createSession(userId: number) {
-  const token = randomUUID();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  await sql`INSERT INTO admin_sessions (id, user_id, expires_at) VALUES (${token}, ${userId}, ${expiresAt.toISOString()})`;
-  return { token, expiresAt };
+  try {
+    const token = randomUUID();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await sql`
+      INSERT INTO admin_sessions (id, user_id, expires_at)
+      VALUES (${token}, ${userId}, ${expiresAt.toISOString()})
+    `;
+    return { token, expiresAt };
+  } catch (err) {
+    console.error('[auth] createSession failed:', err);
+    throw new Error('Unable to create session');
+  }
 }
 
 export async function verifySession(token?: string | null) {
   if (!token) return null;
-  const rows = await sql`
-    SELECT s.id, s.expires_at, u.id as user_id, u.email, u.role
-    FROM admin_sessions s
-    JOIN admin_users u ON u.id = s.user_id
-    WHERE s.id = ${token} AND s.expires_at > NOW()
-    LIMIT 1
-  `;
-  const r = rows[0] as any;
-  if (!r) return null;
-  return { sessionId: r.id as string, expires_at: r.expires_at as string, user: { id: r.user_id as number, email: r.email as string, role: r.role as string } };
+  try {
+    const rows = await sql`
+      SELECT s.id, s.expires_at, u.id as user_id, u.email, u.role
+      FROM admin_sessions s
+      JOIN admin_users u ON u.id = s.user_id
+      WHERE s.id = ${token} AND s.expires_at > NOW()
+      LIMIT 1
+    `;
+    const r = rows[0] as any;
+    if (!r) return null;
+
+    return {
+      sessionId: r.id as string,
+      expires_at: r.expires_at as string,
+      user: {
+        id: r.user_id as number,
+        email: r.email as string,
+        role: r.role as string,
+      },
+    };
+  } catch (err) {
+    console.error('[auth] verifySession failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Helper that reads the admin cookie and verifies the session.
+ * Returns null if no valid session exists.
+ */
+export async function getAdminSession() {
+  try {
+    const jar = cookies();
+    const token = jar.get(ADMIN_COOKIE_NAME)?.value;
+    if (!token) return null;
+
+    return await verifySession(token);
+  } catch (err) {
+    console.error('[auth] getAdminSession failed:', err);
+    return null;
+  }
 }
 
 export async function deleteSession(token?: string | null) {
   if (!token) return;
-  await sql`DELETE FROM admin_sessions WHERE id = ${token}`;
+  try {
+    await sql`DELETE FROM admin_sessions WHERE id = ${token}`;
+  } catch (err) {
+    console.error('[auth] deleteSession failed:', err);
+  }
 }
 
-// Helpers to set/clear cookie in Server Actions or server components
+// Cookie helpers (unchanged, but wrapped for safety)
 export function setAuthCookie(token: string, expiresAt: Date) {
-  const jar = cookies();
-  jar.set({
-    name: ADMIN_COOKIE_NAME,
-    value: token,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    expires: expiresAt,
-  });
+  try {
+    const jar = cookies();
+    jar.set({
+      name: ADMIN_COOKIE_NAME,
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      expires: expiresAt,
+    });
+  } catch (err) {
+    console.error('[auth] setAuthCookie failed:', err);
+  }
 }
 
 export function clearAuthCookie() {
-  const jar = cookies();
-  // cookies().delete is available in new Next APIs
   try {
+    const jar = cookies();
     jar.delete(ADMIN_COOKIE_NAME);
-  } catch (e) {
-    // fallback: set expired cookie
-    jar.set({ name: ADMIN_COOKIE_NAME, value: '', httpOnly: true, path: '/', expires: new Date(0) });
+  } catch (err) {
+    // fallback: set an expired cookie
+    try {
+      const jar = cookies();
+      jar.set({
+        name: ADMIN_COOKIE_NAME,
+        value: '',
+        httpOnly: true,
+        path: '/',
+        expires: new Date(0),
+      });
+    } catch (fallbackErr) {
+      console.error('[auth] clearAuthCookie failed:', fallbackErr);
+    }
   }
 }
 
