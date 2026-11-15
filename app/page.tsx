@@ -61,21 +61,22 @@ const PANEL_PLANS = [
     id: 'starter',
     name: 'Starter',
     price: 50,
-    duration: '29 Days',
+    duration: '24 hours',
     tagline: 'Perfect to test the waters',
-    features: ['10+ number', 'OTP inbox access', 'Instant activation', '29D validity'],
+    features: ['1 private number', 'OTP inbox access', 'Instant activation', '24h validity'],
     icon: Zap,
     accent: 'from-sky-500/20 to-cyan-400/5',
     ring: 'ring-sky-400/30',
     text: 'text-sky-300',
+    popular: false,
   },
   {
     id: 'pro',
     name: 'Pro',
     price: 99,
-    duration: '29 days',
+    duration: '7 days',
     tagline: 'Most chosen plan',
-    features: ['25+ private numbers', 'OTP inbox + full logs', 'Priority support', '29-day validity'],
+    features: ['3 private numbers', 'OTP inbox + full logs', 'Priority support', '7-day validity'],
     icon: Crown,
     accent: 'from-fuchsia-500/25 to-purple-400/5',
     ring: 'ring-fuchsia-400/40',
@@ -88,13 +89,14 @@ const PANEL_PLANS = [
     price: 199,
     duration: '30 days',
     tagline: 'For power users',
-    features: ['50+ numbers', 'API access included', 'Dedicated support', '30-day validity'],
+    features: ['Unlimited numbers', 'API access included', 'Dedicated support', '30-day validity'],
     icon: Gem,
     accent: 'from-amber-500/20 to-yellow-400/5',
     ring: 'ring-amber-400/30',
     text: 'text-amber-300',
+    popular: false,
   },
-] as const
+]
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function BatteryGlyph({ level }: { level: number }) {
@@ -155,7 +157,7 @@ function PricingModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl overflow-hidden border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-2xl">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-2xl">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
@@ -166,7 +168,7 @@ function PricingModal({
           }}
         />
 
-        <DialogHeader className="relative border-b border-white/5 px-6 pt-6 pb-5 text-left">
+        <DialogHeader className="relative border-b border-white/5 px-6 pb-5 pt-6 text-left">
           <div className="mb-2 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-400/30 to-cyan-400/20 ring-1 ring-white/10">
               <Crown className="h-4 w-4 text-fuchsia-300" />
@@ -175,25 +177,22 @@ function PricingModal({
               Premium
             </span>
           </div>
-          <DialogTitle className="text-xl font-semibold">
-            Get a Private Number Panel
-          </DialogTitle>
+          <DialogTitle className="text-xl font-semibold">Get a Private Number Panel</DialogTitle>
           <DialogDescription className="text-sm text-slate-400">
-            Buy a dedicated private number panel from the admin — starting at just ₹50.
-            Contact us on Telegram to activate your plan.
+            Buy a dedicated private number panel from the admin — starting at just ₹50. Contact us
+            on Telegram to activate your plan.
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative grid gap-4 p-6 md:grid-cols-3">
           {PANEL_PLANS.map((plan) => {
             const Icon = plan.icon
-            const isPopular = 'popular' in plan && plan.popular
             return (
               <div
                 key={plan.id}
                 className={`relative flex flex-col rounded-2xl border border-white/10 bg-gradient-to-br ${plan.accent} p-5 ring-1 ${plan.ring} transition hover:-translate-y-0.5 hover:shadow-lg`}
               >
-                {isPopular && (
+                {plan.popular && (
                   <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-fuchsia-500 to-purple-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
                     Most popular
                   </span>
@@ -230,7 +229,7 @@ function PricingModal({
                   href={TELEGRAM_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 ring-1 ring-inset ring-white/10 transition hover:bg-white/20 ${plan.text} hover:${plan.text}`}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold ring-1 ring-inset ring-white/10 transition hover:bg-white/20 ${plan.text}`}
                 >
                   <Send className="h-3.5 w-3.5" />
                   Contact on Telegram
@@ -331,7 +330,8 @@ export default function HomePage() {
         setMessageState('idle')
         return
       }
-      setMessageState('loading')
+      // Only show the loading skeleton on first load, not on every poll
+      setMessageState((s) => (s === 'success' ? s : 'loading'))
       try {
         const res = await fetch(
           `${API_BASE}/api/${encodeURIComponent(debouncedCode)}/messages/${encodeURIComponent(
@@ -361,6 +361,12 @@ export default function HomePage() {
     fetchDevices(c.signal)
     return () => c.abort()
   }, [fetchDevices])
+
+  // Reset to loading state when the device or DB code changes
+  useEffect(() => {
+    setMessageState('idle')
+    setMessages([])
+  }, [selectedId, debouncedCode])
 
   useEffect(() => {
     const c = new AbortController()
@@ -402,6 +408,7 @@ export default function HomePage() {
             'linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
           backgroundSize: '44px 44px',
           maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
         }}
       />
 
@@ -479,10 +486,7 @@ export default function HomePage() {
                 {deviceState === 'loading' && (
                   <div className="space-y-2 p-3">
                     {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="h-16 animate-pulse rounded-xl bg-white/[0.04]"
-                      />
+                      <div key={i} className="h-16 animate-pulse rounded-xl bg-white/[0.04]" />
                     ))}
                   </div>
                 )}
@@ -540,7 +544,9 @@ export default function HomePage() {
                             </div>
                             <div className="flex items-center gap-1 text-xs text-slate-400">
                               <BatteryGlyph level={battery} />
-                              <span className="tabular-nums">{battery}%</span>
+                              <span className="tabular-nums">
+                                {Number.isNaN(battery) ? '--' : `${battery}%`}
+                              </span>
                             </div>
                           </button>
                         </li>
@@ -621,14 +627,13 @@ export default function HomePage() {
                   >
                     <span>Auto</span>
                     <span
-                      onClick={() => setAutoRefresh((v) => !v)}
                       className={`relative h-5 w-9 rounded-full transition ${
                         autoRefresh ? 'bg-cyan-500/70' : 'bg-white/10'
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                          autoRefresh ? 'left-4' : 'left-0.5'
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                          autoRefresh ? 'left-[18px]' : 'left-0.5'
                         }`}
                       />
                     </span>
@@ -661,10 +666,7 @@ export default function HomePage() {
                 {messageState === 'loading' && (
                   <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="h-24 animate-pulse rounded-xl bg-white/[0.04]"
-                      />
+                      <div key={i} className="h-24 animate-pulse rounded-xl bg-white/[0.04]" />
                     ))}
                   </div>
                 )}
