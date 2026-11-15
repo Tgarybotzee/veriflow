@@ -31,7 +31,7 @@ import {
 const API_BASE = 'https://apifb-ten.vercel.app'
 
 // 👇 CHANGE THIS to your Telegram channel / group link
-const TELEGRAM_URL = 'https://t.me/YourChannelUsername'
+const TELEGRAM_URL = 'https://t.me/bagga_tools'
 
 type Device = {
   client_id: string
