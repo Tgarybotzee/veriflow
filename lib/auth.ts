@@ -33,10 +33,8 @@ export async function authenticateAdmin(email: string, password: string) {
     `
     const row = rows[0] as any
     if (!row) return null
-
     const ok = await verifyPassword(password, row.password_hash as string)
     if (!ok) return null
-
     return {
       id: row.id as number,
       email: row.email as string,
@@ -75,7 +73,6 @@ export async function verifySession(token?: string | null) {
     `
     const r = rows[0] as any
     if (!r) return null
-
     return {
       sessionId: r.id as string,
       expires_at: r.expires_at as string,
@@ -92,15 +89,14 @@ export async function verifySession(token?: string | null) {
 }
 
 /**
- * Reads the admin cookie and verifies the session.
- * Returns null if no valid session exists or if the DB call fails.
+ * NEW: reads the admin cookie and verifies the session.
+ * Returns null on any error (missing cookie, DB failure, etc.).
  */
 export async function getAdminSession() {
   try {
     const jar = cookies()
     const token = jar.get(ADMIN_COOKIE_NAME)?.value
     if (!token) return null
-
     return await verifySession(token)
   } catch (err) {
     console.error('[auth] getAdminSession failed:', err)
@@ -139,7 +135,6 @@ export function clearAuthCookie() {
     const jar = cookies()
     jar.delete(ADMIN_COOKIE_NAME)
   } catch (err) {
-    // fallback: set an expired cookie
     try {
       const jar = cookies()
       jar.set({
