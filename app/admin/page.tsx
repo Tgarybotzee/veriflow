@@ -5,7 +5,6 @@ import { getAdminOverviewMetrics } from './actions'
 import AdminPageClient from './page-client'
 
 export default async function AdminPage() {
-  // Safely check the session – returns null on any error.
   const session = await getAdminSession().catch((err) => {
     console.error('[AdminPage] getAdminSession failed:', err)
     return null
@@ -15,7 +14,6 @@ export default async function AdminPage() {
     redirect('/admin/login')
   }
 
-  // Fetch metrics with a try/catch so a DB failure doesn't crash the page.
   let initialData = null
   let errorMessage: string | null = null
   try {
@@ -44,5 +42,10 @@ export default async function AdminPage() {
     )
   }
 
-  return <AdminPageClient initialData={initialData} />
+  return (
+    <AdminPageClient
+      initialData={initialData}
+      sessionEmail={session.user.email}
+    />
+  )
 }
