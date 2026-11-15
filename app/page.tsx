@@ -2,19 +2,20 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Toaster, toast } from 'sonner'
 import {
   Activity,
-  ArrowUpRight,
+  ArrowRight,
   Battery,
   BatteryCharging,
   BatteryLow,
-  Check,
   CheckCircle2,
   CircleAlert,
   Clock3,
   Copy,
+  Crown,
+  Gem,
   Inbox,
-  KeyRound,
   MessageSquareText,
   MonitorSmartphone,
   Radio,
@@ -23,113 +24,81 @@ import {
   ShieldCheck,
   Smartphone,
   Sparkles,
+  Star,
   Wifi,
-  X,
   Zap,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
+// ─── Config ─────────────────────────────────────────────────────────────────
 const API_BASE = 'https://apifb-ten.vercel.app'
-
-// 👇 CHANGE THIS to your Telegram channel / group link
 const TELEGRAM_URL = 'https://t.me/bagga_tools'
 
+// ─── Types ──────────────────────────────────────────────────────────────────
 type Device = {
   client_id: string
   mobNo: string
   battery: string | number
   status: boolean
 }
-
 type OtpMessage = {
   id: string
   sender: string
   message: string
   dateTime: string
 }
-
 type FetchState = 'idle' | 'loading' | 'success' | 'error'
 
-/* ------------------------------------------------------------------ */
-/*  Styles (keyframes + micro details)                                 */
-/* ------------------------------------------------------------------ */
+// ─── Pricing plans ──────────────────────────────────────────────────────────
+const PANEL_PLANS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 50,
+    duration: '24 hours',
+    tagline: 'Perfect to test the waters',
+    features: ['1 private number', 'OTP inbox access', 'Instant activation', '24h validity'],
+    icon: Zap,
+    accent: 'from-sky-500/20 to-cyan-400/5',
+    ring: 'ring-sky-400/30',
+    text: 'text-sky-300',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 99,
+    duration: '7 days',
+    tagline: 'Most chosen plan',
+    features: ['3 private numbers', 'OTP inbox + full logs', 'Priority support', '7-day validity'],
+    icon: Crown,
+    accent: 'from-fuchsia-500/25 to-purple-400/5',
+    ring: 'ring-fuchsia-400/40',
+    text: 'text-fuchsia-300',
+    popular: true,
+  },
+  {
+    id: 'elite',
+    name: 'Elite',
+    price: 199,
+    duration: '30 days',
+    tagline: 'For power users',
+    features: ['Unlimited numbers', 'API access included', 'Dedicated support', '30-day validity'],
+    icon: Gem,
+    accent: 'from-amber-500/20 to-yellow-400/5',
+    ring: 'ring-amber-400/30',
+    text: 'text-amber-300',
+  },
+] as const
 
-const GLOBAL_CSS = `
-  @keyframes auroraShift {
-    0%, 100% { transform: translate3d(0,0,0) scale(1); }
-    50%      { transform: translate3d(4%, -4%, 0) scale(1.12); }
-  }
-  @keyframes floatY {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-10px); }
-  }
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes popIn {
-    0%   { opacity: 0; transform: translateY(22px) scale(.94); }
-    100% { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  @keyframes overlayIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  @keyframes shimmerX {
-    0%   { transform: translateX(-130%); }
-    100% { transform: translateX(240%); }
-  }
-  @keyframes glowPulse {
-    0%, 100% { opacity: .45; }
-    50%      { opacity: 1; }
-  }
-  @keyframes ringPing {
-    0%   { transform: scale(.85); opacity: .8; }
-    100% { transform: scale(2.2); opacity: 0; }
-  }
-
-  .anim-aurora      { animation: auroraShift 20s ease-in-out infinite; }
-  .anim-float       { animation: floatY 6s ease-in-out infinite; }
-  .anim-fade-up     { animation: fadeUp .5s cubic-bezier(.2,.8,.3,1) both; }
-  .anim-pop-in      { animation: popIn .38s cubic-bezier(.2,.85,.3,1) both; }
-  .anim-overlay-in  { animation: overlayIn .28s ease both; }
-  .anim-glow-pulse  { animation: glowPulse 3.5s ease-in-out infinite; }
-  .anim-ring-ping   { animation: ringPing 2s cubic-bezier(0,0,.2,1) infinite; }
-
-  .shimmer-line::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
-    animation: shimmerX 2.4s ease-in-out infinite;
-  }
-
-  .no-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-  .no-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  .no-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, .22);
-    border-radius: 999px;
-  }
-  .no-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, .45); }
-
-  .glass {
-    background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.015));
-    backdrop-filter: blur(22px) saturate(140%);
-    -webkit-backdrop-filter: blur(22px) saturate(140%);
-  }
-
-  .otp-digit {
-    box-shadow:
-      inset 0 1px 0 0 rgba(255,255,255,.10),
-      0 0 22px -8px rgba(34,211,238,.85);
-  }
-`
-
-/* ------------------------------------------------------------------ */
-/*  Small helpers                                                      */
-/* ------------------------------------------------------------------ */
-
+// ─── Helpers ────────────────────────────────────────────────────────────────
 function BatteryGlyph({ level }: { level: number }) {
-  if (Number.isNaN(level)) return <Battery className="h-3.5 w-3.5 text-slate-500" />
+  if (Number.isNaN(level)) return <Battery className="h-3.5 w-3.5 text-slate-400" />
   if (level > 60) return <BatteryCharging className="h-3.5 w-3.5 text-emerald-400" />
   if (level >= 20) return <Battery className="h-3.5 w-3.5 text-amber-400" />
   return <BatteryLow className="h-3.5 w-3.5 text-rose-400" />
@@ -151,23 +120,15 @@ function extractOtp(value: string) {
   return value.match(/\b\d{4,8}\b/)?.[0]
 }
 
-/* ------------------------------------------------------------------ */
-/*  Copy button                                                        */
-/* ------------------------------------------------------------------ */
-
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState(false)
-
+function CopyButton({ text }: { text: string }) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setError(false)
-      setTimeout(() => setCopied(false), 1600)
+      toast.success('OTP copied to clipboard', {
+        icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
+      })
     } catch {
-      setError(true)
-      setTimeout(() => setError(false), 1600)
+      toast.error('Copy failed — long-press to copy manually')
     }
   }
 
@@ -175,166 +136,131 @@ function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) 
     <button
       type="button"
       onClick={handleCopy}
-      aria-label={copied ? 'Copied' : `Copy ${label}`}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition-all active:scale-95 ${
-        copied
-          ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
-          : error
-            ? 'border-rose-400/40 bg-rose-400/10 text-rose-300'
-            : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-400/50 hover:bg-cyan-400/10 hover:text-cyan-200'
-      }`}
+      aria-label="Copy OTP"
+      className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 transition hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-cyan-200"
     >
-      {copied ? (
-        <>
-          <CheckCircle2 className="h-3.5 w-3.5" /> Copied
-        </>
-      ) : error ? (
-        <>
-          <CircleAlert className="h-3.5 w-3.5" /> Failed
-        </>
-      ) : (
-        <>
-          <Copy className="h-3.5 w-3.5" /> {label}
-        </>
-      )}
+      <Copy className="h-3.5 w-3.5" />
+      Copy
     </button>
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Telegram join popup (overlay)                                      */
-/* ------------------------------------------------------------------ */
-
-function TelegramModal({
+// ─── Pricing modal ──────────────────────────────────────────────────────────
+function PricingModal({
   open,
-  onClose,
+  onOpenChange,
 }: {
   open: boolean
-  onClose: () => void
+  onOpenChange: (v: boolean) => void
 }) {
-  useEffect(() => {
-    if (!open) return
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.body.style.overflow = prevOverflow
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [open, onClose])
-
-  if (!open) return null
-
-  const benefits = [
-    'Instant OTP & device alerts',
-    'Early access to new features',
-    'Direct support from the team',
-  ]
-
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="tg-title"
-    >
-      {/* overlay */}
-      <div
-        className="anim-overlay-in absolute inset-0 bg-[#03050c]/85 backdrop-blur-md"
-        onClick={onClose}
-      />
-
-      {/* card */}
-      <div className="anim-pop-in relative w-full max-w-[420px]">
-        {/* glow behind card */}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl overflow-hidden border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-2xl">
         <div
           aria-hidden
-          className="anim-glow-pulse absolute -inset-6 -z-10 rounded-[36px] blur-3xl"
+          className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(60% 60% at 50% 20%, rgba(34,211,238,.55), transparent 70%),' +
-              'radial-gradient(60% 60% at 80% 90%, rgba(168,85,247,.45), transparent 70%)',
+              'radial-gradient(600px 300px at 50% -10%, rgba(168,85,247,0.18), transparent 60%),' +
+              'radial-gradient(400px 200px at 90% 10%, rgba(34,211,238,0.12), transparent 60%)',
           }}
         />
 
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#080d18]/95 p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,.9)] sm:p-7">
-          {/* top gradient hairline */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent" />
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
-          >
-            <X className="h-4 w-4" />
-          </button>
-
-          {/* icon */}
-          <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center">
-            <span className="anim-ring-ping absolute inset-0 rounded-2xl bg-cyan-400/30" />
-            <div className="anim-float relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-sky-600 shadow-[0_10px_40px_-8px_rgba(34,211,238,.9)]">
-              <Send className="h-7 w-7 -translate-x-[1px] text-white" />
+        <DialogHeader className="relative border-b border-white/5 px-6 pt-6 pb-5 text-left">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-400/30 to-cyan-400/20 ring-1 ring-white/10">
+              <Crown className="h-4 w-4 text-fuchsia-300" />
             </div>
+            <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
+              Premium
+            </span>
           </div>
+          <DialogTitle className="text-xl font-semibold">
+            Get a Private Number Panel
+          </DialogTitle>
+          <DialogDescription className="text-sm text-slate-400">
+            Buy a dedicated private number panel from the admin — starting at just ₹50.
+            Contact us on Telegram to activate your plan.
+          </DialogDescription>
+        </DialogHeader>
 
-          <h2
-            id="tg-title"
-            className="text-center text-xl font-semibold tracking-tight text-white"
-          >
-            Join our Telegram
-          </h2>
-          <p className="mx-auto mt-2 max-w-[300px] text-center text-[13px] leading-relaxed text-slate-400">
-            Get instant OTP drops, uptime notices and feature updates right in your
-            pocket.
-          </p>
-
-          <ul className="mt-5 space-y-2.5">
-            {benefits.map((b) => (
-              <li
-                key={b}
-                className="flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5 text-[13px] text-slate-300"
+        <div className="relative grid gap-4 p-6 md:grid-cols-3">
+          {PANEL_PLANS.map((plan) => {
+            const Icon = plan.icon
+            const isPopular = 'popular' in plan && plan.popular
+            return (
+              <div
+                key={plan.id}
+                className={`relative flex flex-col rounded-2xl border border-white/10 bg-gradient-to-br ${plan.accent} p-5 ring-1 ${plan.ring} transition hover:-translate-y-0.5 hover:shadow-lg`}
               >
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-400">
-                  <Check className="h-3 w-3" />
-                </span>
-                {b}
-              </li>
-            ))}
-          </ul>
+                {isPopular && (
+                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-fuchsia-500 to-purple-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
+                    Most popular
+                  </span>
+                )}
+                <div className="mb-3 flex items-center gap-2">
+                  <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 ring-1 ring-inset ring-white/10 ${plan.text}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">{plan.name}</p>
+                    <p className="text-[11px] text-slate-400">{plan.tagline}</p>
+                  </div>
+                </div>
 
+                <div className="mb-4 flex items-end gap-1">
+                  <span className="text-3xl font-bold tracking-tight text-slate-100">
+                    ₹{plan.price}
+                  </span>
+                  <span className="mb-1 text-xs text-slate-500">/ {plan.duration}</span>
+                </div>
+
+                <ul className="mb-5 flex-1 space-y-2 text-xs text-slate-300">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5">
+                      <CheckCircle2 className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${plan.text}`} />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <a
+                  href={TELEGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 ring-1 ring-inset ring-white/10 transition hover:bg-white/20 ${plan.text} hover:${plan.text}`}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Contact on Telegram
+                </a>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="relative flex flex-col items-center justify-between gap-3 border-t border-white/5 bg-white/[0.02] px-6 py-4 text-xs text-slate-400 sm:flex-row">
+          <p className="flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+            Pay securely via UPI · Instant activation
+          </p>
           <a
             href={TELEGRAM_URL}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={onClose}
-            className="group mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 text-sm font-semibold text-[#04121a] shadow-[0_12px_40px_-12px_rgba(34,211,238,.95)] transition-all hover:brightness-110 active:scale-[.985]"
+            className="inline-flex items-center gap-1.5 font-medium text-cyan-300 hover:text-cyan-200"
           >
-            <Send className="h-4 w-4" />
-            Join Channel
-            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            @bagga_tools
+            <ArrowRight className="h-3.5 w-3.5" />
           </a>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-2.5 w-full rounded-xl py-2.5 text-[13px] font-medium text-slate-500 transition hover:bg-white/[0.04] hover:text-slate-300"
-          >
-            Maybe later
-          </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
-
+// ─── Main page ──────────────────────────────────────────────────────────────
 export default function HomePage() {
   const [dbCode, setDbCode] = useState('101')
   const [debouncedCode, setDebouncedCode] = useState(dbCode)
@@ -346,14 +272,8 @@ export default function HomePage() {
   const [error, setError] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [showTelegram, setShowTelegram] = useState(false)
+  const [pricingOpen, setPricingOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
-
-  /* Telegram popup — appears on every visit */
-  useEffect(() => {
-    const t = setTimeout(() => setShowTelegram(true), 900)
-    return () => clearTimeout(t)
-  }, [])
 
   const selectedDevice = useMemo(
     () => devices.find((d) => d.client_id === selectedId),
@@ -365,7 +285,6 @@ export default function HomePage() {
     return () => clearTimeout(t)
   }, [dbCode])
 
-  /* ---------------------------- devices ---------------------------- */
   const fetchDevices = useCallback(
     async (signal?: AbortSignal) => {
       if (!debouncedCode) return
@@ -389,9 +308,7 @@ export default function HomePage() {
           : []
         setDevices(active)
         setSelectedId((cur) =>
-          active.some((d) => d.client_id === cur)
-            ? cur
-            : active[0]?.client_id ?? '',
+          active.some((d) => d.client_id === cur) ? cur : active[0]?.client_id ?? '',
         )
         setDeviceState('success')
         setLastUpdated(new Date())
@@ -407,7 +324,6 @@ export default function HomePage() {
     [debouncedCode],
   )
 
-  /* --------------------------- messages ---------------------------- */
   const fetchMessages = useCallback(
     async (signal?: AbortSignal) => {
       if (!selectedDevice) {
@@ -418,9 +334,9 @@ export default function HomePage() {
       setMessageState('loading')
       try {
         const res = await fetch(
-          `${API_BASE}/api/${encodeURIComponent(
-            debouncedCode,
-          )}/messages/${encodeURIComponent(selectedDevice.client_id)}`,
+          `${API_BASE}/api/${encodeURIComponent(debouncedCode)}/messages/${encodeURIComponent(
+            selectedDevice.client_id,
+          )}`,
           { signal, cache: 'no-store' },
         )
         if (!res.ok) throw new Error(`Unable to load messages (${res.status}).`)
@@ -464,145 +380,132 @@ export default function HomePage() {
     if (selectedDevice) fetchMessages()
   }
 
-  /* ------------------------------ UI ------------------------------- */
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#05070f] text-slate-100">
-      <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
+    <div className="relative min-h-screen overflow-hidden bg-[#070b14] text-slate-100">
+      {/* Ambient background */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(1200px 600px at 15% -10%, rgba(56,189,248,0.18), transparent 60%),' +
+            'radial-gradient(900px 500px at 100% 10%, rgba(168,85,247,0.15), transparent 55%),' +
+            'radial-gradient(700px 400px at 50% 110%, rgba(16,185,129,0.12), transparent 60%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.06]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px),' +
+            'linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
+          backgroundSize: '44px 44px',
+          maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+        }}
+      />
 
-      {/* ---------------- ambient background ---------------- */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div
-          className="anim-aurora absolute -left-[15%] -top-[25%] h-[70vh] w-[70vw] rounded-full blur-[120px]"
-          style={{ background: 'radial-gradient(circle, rgba(34,211,238,.28), transparent 65%)' }}
-        />
-        <div
-          className="anim-aurora absolute -right-[15%] top-[5%] h-[60vh] w-[55vw] rounded-full blur-[120px]"
-          style={{
-            background: 'radial-gradient(circle, rgba(168,85,247,.26), transparent 65%)',
-            animationDelay: '-6s',
-          }}
-        />
-        <div
-          className="anim-aurora absolute bottom-[-25%] left-[25%] h-[55vh] w-[60vw] rounded-full blur-[130px]"
-          style={{
-            background: 'radial-gradient(circle, rgba(16,185,129,.18), transparent 65%)',
-            animationDelay: '-12s',
-          }}
-        />
-        {/* grid */}
-        <div
-          className="absolute inset-0 opacity-[0.055]"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),' +
-              'linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
-            maskImage: 'radial-gradient(ellipse at 50% 30%, black 20%, transparent 72%)',
-            WebkitMaskImage:
-              'radial-gradient(ellipse at 50% 30%, black 20%, transparent 72%)',
-          }}
-        />
-      </div>
-
-      {/* ---------------- content ---------------- */}
-      <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-        {/* ============ HEADER ============ */}
-        <header className="anim-fade-up mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Header */}
+        <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400/25 to-fuchsia-500/15 ring-1 ring-inset ring-white/15 backdrop-blur">
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/30 to-fuchsia-500/20 ring-1 ring-white/10 backdrop-blur">
               <Radio className="h-5 w-5 text-cyan-300" />
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_14px_3px_rgba(52,211,153,.65)]" />
+              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_2px_rgba(52,211,153,0.7)]" />
             </div>
             <div>
-              <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white">
-                Signal Console
-              </h1>
-              <p className="text-[11px] text-slate-400">
-                Real-time OTP intelligence ·{' '}
-                <span className="font-medium text-cyan-300">live</span>
-              </p>
+              <h1 className="text-lg font-semibold tracking-tight">Signal Console</h1>
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex items-center gap-1 text-xs text-slate-400 hover:text-cyan-300"
+              >
+                <Send className="h-3 w-3" />
+                Join @bagga_tools
+                <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+              </a>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* DB code */}
-            <div className="relative">
-              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-              <input
-                value={dbCode}
-                onChange={(e) => setDbCode(e.target.value)}
-                placeholder="DB code"
-                aria-label="Database code"
-                className="h-11 w-[132px] rounded-xl border border-white/10 bg-white/[0.04] pl-9 pr-3 font-mono text-sm text-white outline-none backdrop-blur transition placeholder:font-sans placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06] focus:ring-2 focus:ring-cyan-400/20"
-              />
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={dbCode}
+              onChange={(e) => setDbCode(e.target.value)}
+              placeholder="DB code"
+              aria-label="Database code"
+              className="h-10 w-28 rounded-lg border border-white/10 bg-white/[0.04] px-3 font-mono text-sm text-slate-100 outline-none backdrop-blur transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06] focus:ring-2 focus:ring-cyan-400/20"
+            />
 
             <button
               type="button"
               onClick={refreshAll}
               disabled={busy}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-[13px] font-medium text-slate-200 backdrop-blur transition hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-cyan-200 disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-cyan-200 disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setPricingOpen(true)}
+              className="group relative inline-flex h-10 items-center gap-2 overflow-hidden rounded-lg bg-gradient-to-r from-fuchsia-500 via-purple-500 to-cyan-500 px-4 text-sm font-semibold text-white shadow-[0_0_24px_-6px_rgba(217,70,239,0.6)] transition hover:shadow-[0_0_28px_-4px_rgba(217,70,239,0.8)]"
+            >
+              <Sparkles className="h-4 w-4" />
+              Get Panel
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold">
+                ₹50+
+              </span>
+            </button>
           </div>
         </header>
 
-        {/* ============ BODY ============ */}
-        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-          {/* ---------- sidebar ---------- */}
-          <aside className="anim-fade-up space-y-3" style={{ animationDelay: '60ms' }}>
-            <div className="glass overflow-hidden rounded-2xl border border-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,.06)]">
-              <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+        <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+          {/* Sidebar */}
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
+              <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <MonitorSmartphone className="h-4 w-4 text-slate-400" />
-                  <h2 className="text-[13px] font-semibold text-white">Devices</h2>
+                  <h2 className="text-sm font-semibold">Devices</h2>
                 </div>
-                <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+                <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-cyan-300">
                   {devices.length} active
                 </span>
               </div>
 
-              <div className="no-scrollbar max-h-[58vh] overflow-y-auto">
-                {/* loading */}
+              <div className="max-h-[60vh] overflow-y-auto">
                 {deviceState === 'loading' && (
                   <div className="space-y-2 p-3">
                     {[1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="shimmer-line relative h-16 overflow-hidden rounded-xl bg-white/[0.04]"
+                        className="h-16 animate-pulse rounded-xl bg-white/[0.04]"
                       />
                     ))}
                   </div>
                 )}
 
-                {/* error */}
                 {deviceState === 'error' && (
-                  <div className="m-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.08] p-3">
-                    <div className="mb-1 flex items-center gap-1.5 text-[13px] font-medium text-rose-200">
+                  <div className="m-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+                    <div className="mb-1 flex items-center gap-1.5 font-medium">
                       <CircleAlert className="h-4 w-4" /> Connection failed
                     </div>
-                    <p className="text-[11px] leading-relaxed text-rose-200/70">{error}</p>
+                    <p className="text-xs text-rose-200/80">{error}</p>
                   </div>
                 )}
 
-                {/* empty */}
                 {deviceState === 'success' && devices.length === 0 && (
-                  <div className="px-4 py-10 text-center">
-                    <Inbox className="mx-auto mb-2 h-8 w-8 text-slate-600" />
-                    <p className="text-[13px] font-medium text-slate-300">
-                      No active devices
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Check the DB code above.
-                    </p>
+                  <div className="p-6 text-center">
+                    <Inbox className="mx-auto mb-2 h-8 w-8 text-slate-500" />
+                    <p className="text-sm font-medium text-slate-300">No active devices</p>
+                    <p className="mt-1 text-xs text-slate-500">Check the DB code above.</p>
                   </div>
                 )}
 
-                {/* list */}
                 {deviceState === 'success' && devices.length > 0 && (
-                  <ul className="divide-y divide-white/[0.05]">
+                  <ul className="divide-y divide-white/5">
                     {devices.map((device) => {
                       const battery = Number(device.battery)
                       const selected = device.client_id === selectedId
@@ -612,33 +515,30 @@ export default function HomePage() {
                             type="button"
                             onClick={() => setSelectedId(device.client_id)}
                             aria-pressed={selected}
-                            className={`group relative flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                            className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition ${
                               selected
-                                ? 'bg-gradient-to-r from-cyan-400/[0.14] via-cyan-400/[0.04] to-transparent'
+                                ? 'bg-gradient-to-r from-cyan-400/15 to-transparent'
                                 : 'hover:bg-white/[0.03]'
                             }`}
                           >
-                            {selected && (
-                              <span className="absolute left-0 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-full bg-cyan-400 shadow-[0_0_14px_1px_rgba(34,211,238,.85)]" />
-                            )}
                             <div
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset transition ${
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition ${
                                 selected
                                   ? 'bg-cyan-400/20 text-cyan-200 ring-cyan-400/40'
-                                  : 'bg-white/[0.04] text-slate-400 ring-white/10 group-hover:text-slate-300'
+                                  : 'bg-white/5 text-slate-400 ring-white/10 group-hover:text-slate-300'
                               }`}
                             >
                               <Smartphone className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[13px] font-medium text-slate-100">
+                              <p className="truncate text-sm font-medium text-slate-100">
                                 {device.mobNo}
                               </p>
-                              <p className="truncate font-mono text-[10px] text-slate-500">
+                              <p className="truncate font-mono text-[11px] text-slate-500">
                                 {device.client_id}
                               </p>
                             </div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <div className="flex items-center gap-1 text-xs text-slate-400">
                               <BatteryGlyph level={battery} />
                               <span className="tabular-nums">{battery}%</span>
                             </div>
@@ -651,8 +551,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* status strip */}
-            <div className="glass flex items-center justify-between rounded-xl border border-white/[0.07] px-3.5 py-2.5 text-[11px] text-slate-400">
+            <div className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Wifi className="h-3 w-3 text-emerald-400" />
                 API online
@@ -662,35 +561,51 @@ export default function HomePage() {
                 {autoRefresh ? '3s polling' : 'manual'}
               </span>
             </div>
+
+            {/* Promo card */}
+            <button
+              type="button"
+              onClick={() => setPricingOpen(true)}
+              className="group relative block w-full overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-fuchsia-500/15 via-purple-500/10 to-cyan-500/10 p-4 text-left transition hover:border-fuchsia-400/30"
+            >
+              <div className="mb-1 flex items-center gap-2">
+                <Star className="h-4 w-4 text-fuchsia-300" />
+                <span className="text-sm font-semibold">Private Number Panel</span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Get your own dedicated OTP inbox — from just{' '}
+                <span className="font-semibold text-cyan-300">₹50</span>.
+              </p>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-fuchsia-300">
+                View plans
+                <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+              </span>
+            </button>
           </aside>
 
-          {/* ---------- main panel ---------- */}
-          <section className="anim-fade-up space-y-3" style={{ animationDelay: '120ms' }}>
-            <div className="glass relative overflow-hidden rounded-2xl border border-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,.06)]">
-              {/* top hairline */}
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
-
-              {/* header */}
-              <div className="flex flex-col gap-3 border-b border-white/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white">
+          {/* Main panel */}
+          <section className="space-y-4">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
+              <div className="flex flex-col gap-3 border-b border-white/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold">
                     {selectedDevice ? (
                       <>
-                        <Sparkles className="h-4 w-4 shrink-0 text-cyan-300" />
-                        <span className="truncate">{selectedDevice.mobNo}</span>
+                        <Sparkles className="h-4 w-4 text-cyan-300" />
+                        {selectedDevice.mobNo}
                       </>
                     ) : (
                       'Select a device'
                     )}
                   </h2>
-                  <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                  <p className="mt-0.5 text-xs text-slate-400">
                     {selectedDevice
                       ? `Incoming auth messages for ${selectedDevice.client_id}`
                       : 'Choose an active endpoint from the list.'}
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex items-center gap-3">
                   {selectedDevice && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
                       <span className="relative flex h-1.5 w-1.5">
@@ -700,202 +615,165 @@ export default function HomePage() {
                       Live
                     </span>
                   )}
-
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={autoRefresh}
-                    aria-label="Toggle auto refresh"
-                    onClick={() => setAutoRefresh((v) => !v)}
-                    className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
-                      autoRefresh
-                        ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200'
-                        : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-300'
-                    }`}
+                  <label
+                    htmlFor="auto"
+                    className="flex cursor-pointer items-center gap-2 text-xs text-slate-400"
                   >
+                    <span>Auto</span>
                     <span
-                      className={`relative h-3.5 w-6 rounded-full transition ${
-                        autoRefresh ? 'bg-cyan-400/80' : 'bg-white/15'
+                      onClick={() => setAutoRefresh((v) => !v)}
+                      className={`relative h-5 w-9 rounded-full transition ${
+                        autoRefresh ? 'bg-cyan-500/70' : 'bg-white/10'
                       }`}
                     >
                       <span
-                        className={`absolute top-[2px] h-2.5 w-2.5 rounded-full bg-white shadow transition-all ${
-                          autoRefresh ? 'left-[13px]' : 'left-[2px]'
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                          autoRefresh ? 'left-4' : 'left-0.5'
                         }`}
                       />
                     </span>
-                    Auto
-                  </button>
+                    <input
+                      id="auto"
+                      type="checkbox"
+                      className="sr-only"
+                      checked={autoRefresh}
+                      onChange={(e) => setAutoRefresh(e.target.checked)}
+                    />
+                  </label>
                 </div>
               </div>
 
-              {/* meta strip */}
               {selectedDevice && (
-                <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-2 text-[11px] text-slate-500">
+                <div className="flex items-center justify-between border-b border-white/5 px-5 py-2 text-[11px] text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <Clock3 className="h-3 w-3" />
                     {lastUpdated
                       ? `Updated ${lastUpdated.toLocaleTimeString()}`
                       : 'Waiting for data'}
                   </span>
-                  <span className="flex items-center gap-1.5 tabular-nums">
-                    <Zap className="h-3 w-3 text-cyan-400/70" />
+                  <span className="tabular-nums">
                     {messages.length} {messages.length === 1 ? 'message' : 'messages'}
                   </span>
                 </div>
               )}
 
-              {/* body */}
-              <div className="p-4 sm:p-5">
-                {/* loading */}
+              <div className="p-5">
                 {messageState === 'loading' && (
                   <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="shimmer-line relative h-28 overflow-hidden rounded-xl bg-white/[0.04]"
+                        className="h-24 animate-pulse rounded-xl bg-white/[0.04]"
                       />
                     ))}
                   </div>
                 )}
 
-                {/* error */}
                 {messageState === 'error' && (
-                  <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.08] p-4">
-                    <div className="mb-1 flex items-center gap-2 text-[13px] font-medium text-rose-200">
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                    <div className="mb-1 flex items-center gap-2 font-medium">
                       <CircleAlert className="h-4 w-4" /> Stream unavailable
                     </div>
-                    <p className="text-[11px] leading-relaxed text-rose-200/70">{error}</p>
+                    <p className="text-xs text-rose-200/80">{error}</p>
                     <button
                       type="button"
                       onClick={() => fetchMessages()}
-                      className="mt-3 rounded-lg border border-rose-400/40 px-3 py-1.5 text-[11px] font-medium text-rose-100 transition hover:bg-rose-500/20"
+                      className="mt-3 rounded-md border border-rose-400/40 px-3 py-1 text-xs text-rose-100 hover:bg-rose-500/20"
                     >
                       Try again
                     </button>
                   </div>
                 )}
 
-                {/* no device */}
                 {!selectedDevice && messageState !== 'loading' && (
                   <div className="py-16 text-center">
-                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.03]">
-                      <MonitorSmartphone className="h-6 w-6 text-slate-600" />
-                    </div>
-                    <p className="text-[13px] font-medium text-slate-300">
-                      No device selected
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-500">
+                    <MonitorSmartphone className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+                    <p className="text-sm font-medium text-slate-300">No device selected</p>
+                    <p className="mt-1 text-xs text-slate-500">
                       Pick a device on the left to view its OTP stream.
                     </p>
                   </div>
                 )}
 
-                {/* empty messages */}
-                {selectedDevice &&
-                  messageState === 'success' &&
-                  messages.length === 0 && (
-                    <div className="py-16 text-center">
-                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.03]">
-                        <MessageSquareText className="h-6 w-6 text-slate-600" />
-                      </div>
-                      <p className="text-[13px] font-medium text-slate-300">
-                        No messages yet
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        New OTPs will appear here automatically.
-                      </p>
-                    </div>
-                  )}
+                {selectedDevice && messageState === 'success' && messages.length === 0 && (
+                  <div className="py-16 text-center">
+                    <MessageSquareText className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+                    <p className="text-sm font-medium text-slate-300">No messages yet</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      New OTPs will appear here automatically.
+                    </p>
+                  </div>
+                )}
 
-                {/* message list */}
-                {selectedDevice &&
-                  messageState === 'success' &&
-                  messages.length > 0 && (
-                    <ul className="space-y-3">
-                      {messages.map((item, index) => {
-                        const otp = extractOtp(item.message)
-                        const cleaned = otp
-                          ? item.message.replace(otp, '').replace(/\s+/g, ' ').trim()
-                          : item.message
+                {selectedDevice && messageState === 'success' && messages.length > 0 && (
+                  <ul className="space-y-3">
+                    {messages.map((item) => {
+                      const otp = extractOtp(item.message)
+                      const cleaned = otp
+                        ? item.message.replace(otp, '').replace(/\s+/g, ' ').trim()
+                        : item.message
+                      return (
+                        <li
+                          key={item.id}
+                          className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-4 transition hover:border-cyan-400/30"
+                        >
+                          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 transition group-hover:opacity-100" />
 
-                        return (
-                          <li
-                            key={item.id}
-                            className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-white/[0.045] to-white/[0.012] p-4 transition-all duration-300 hover:border-cyan-400/30 hover:from-cyan-400/[0.06]"
-                          >
-                            {/* hover hairline */}
-                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-                            {/* top row */}
-                            <div className="mb-2.5 flex items-center justify-between gap-2">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400/20 to-fuchsia-400/10 text-[10px] font-bold uppercase text-cyan-300 ring-1 ring-inset ring-cyan-400/25">
-                                  {item.sender.slice(0, 2)}
-                                </div>
-                                <span className="truncate text-[13px] font-semibold text-slate-100">
-                                  {item.sender}
-                                </span>
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-cyan-400/10 text-[10px] font-bold uppercase text-cyan-300 ring-1 ring-inset ring-cyan-400/20">
+                                {item.sender.slice(0, 2)}
                               </div>
-
-                              {index === 0 ? (
-                                <span className="flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
-                                  <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                                  New
-                                </span>
-                              ) : (
-                                <span className="shrink-0 rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-fuchsia-300">
-                                  OTP
-                                </span>
-                              )}
-                            </div>
-
-                            {/* cleaned message */}
-                            {cleaned && (
-                              <p className="mb-3 break-words text-[12.5px] leading-relaxed text-slate-400">
-                                {cleaned}
-                              </p>
-                            )}
-
-                            {/* OTP digits */}
-                            {otp && (
-                              <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                                {otp.split('').map((digit, i) => (
-                                  <span
-                                    key={i}
-                                    className="otp-digit flex h-10 w-8 items-center justify-center rounded-lg border border-cyan-400/25 bg-cyan-400/[0.09] font-mono text-[17px] font-bold text-cyan-100"
-                                  >
-                                    {digit}
-                                  </span>
-                                ))}
-                                <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-400/60">
-                                  code
-                                </span>
-                              </div>
-                            )}
-
-                            {/* footer row */}
-                            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                              <span className="flex items-center gap-1.5">
-                                <Clock3 className="h-3 w-3" />
-                                {formatTime(item.dateTime)}
+                              <span className="text-sm font-semibold text-slate-100">
+                                {item.sender}
                               </span>
-                              <CopyButton text={otp ?? item.message} label={otp ? 'Copy OTP' : 'Copy'} />
                             </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
+                            <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
+                              OTP
+                            </span>
+                          </div>
+
+                          {cleaned && (
+                            <p className="mb-2 break-words text-sm text-slate-400">{cleaned}</p>
+                          )}
+
+                          {otp && (
+                            <div className="mb-3 flex items-center gap-3">
+                              <code className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 font-mono text-xl font-bold tracking-[0.2em] text-cyan-200 shadow-[0_0_24px_-6px_rgba(34,211,238,0.6)]">
+                                {otp}
+                              </code>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="flex items-center gap-1.5">
+                              <Clock3 className="h-3 w-3" />
+                              {formatTime(item.dateTime)}
+                            </span>
+                            <CopyButton text={otp ?? item.message} />
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
 
-            {/* page footer */}
-            <footer className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-500">
+            <footer className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
               <span className="flex items-center gap-1.5">
                 <Activity className="h-3 w-3 text-cyan-400" />
                 {API_BASE.replace('https://', '')}
               </span>
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 hover:text-cyan-300"
+              >
+                <Send className="h-3 w-3 text-cyan-400" />
+                t.me/bagga_tools
+              </a>
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="h-3 w-3 text-emerald-400" />
                 Secure channel
@@ -905,19 +783,33 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ---------------- floating telegram button ---------------- */}
-      <button
-        type="button"
-        onClick={() => setShowTelegram(true)}
-        aria-label="Open Telegram channel popup"
-        className="group fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-sky-500 text-[#04121a] shadow-[0_14px_40px_-10px_rgba(34,211,238,.95)] transition-all hover:scale-105 active:scale-95"
+      {/* Floating Telegram button */}
+      <a
+        href={TELEGRAM_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Join our Telegram channel"
+        className="group fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-cyan-400 text-white shadow-[0_8px_30px_-4px_rgba(14,165,233,0.7)] transition hover:scale-105 hover:shadow-[0_8px_36px_-2px_rgba(14,165,233,0.9)]"
       >
-        <Send className="h-5 w-5 -translate-x-[1px] transition-transform group-hover:rotate-12" />
-        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-fuchsia-400 ring-2 ring-[#05070f]" />
-      </button>
+        <Send className="h-6 w-6 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        <span className="pointer-events-none absolute inset-0 animate-ping rounded-full bg-sky-400/40" />
+      </a>
 
-      {/* ---------------- telegram popup ---------------- */}
-      <TelegramModal open={showTelegram} onClose={() => setShowTelegram(false)} />
+      {/* Pricing modal */}
+      <PricingModal open={pricingOpen} onOpenChange={setPricingOpen} />
+
+      {/* Toasts */}
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: 'rgba(15, 23, 42, 0.95)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#f1f5f9',
+          },
+        }}
+      />
     </div>
   )
 }
