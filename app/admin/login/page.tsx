@@ -1,33 +1,18 @@
 // app/admin/login/page.tsx
 import { redirect } from 'next/navigation'
 import { getAdminSession } from '@/lib/auth'
-import { getAdminOverviewMetrics } from './actions'
-import AdminPageClient from './page-client'
+import LoginForm from './login-form'
 
-export default async function AdminPage() {
-  // Safely retrieve the session – returns null if anything goes wrong.
-  const session = await getAdminSession()
-  if (!session) {
-    redirect('/admin/login')
+export default async function AdminLoginPage() {
+  // If the user already has a valid session, send them to the dashboard.
+  const session = await getAdminSession().catch(() => null)
+  if (session) {
+    redirect('/admin')
   }
 
-  // Fetch metrics; wrap in try/catch so a DB error doesn't crash the page.
-  let initialData = null
-  let errorMessage: string | null = null
-  try {
-    initialData = await getAdminOverviewMetrics()
-  } catch (err) {
-    console.error('[AdminPage] Failed to load metrics:', err)
-    errorMessage = 'Unable to load dashboard data. Please try again later.'
-  }
-
-  if (errorMessage) {
-    return (
-      <div className="flex h-screen items-center justify-center text-red-600">
-        {errorMessage}
-      </div>
-    )
-  }
-
-  return <AdminPageClient initialData={initialData} />
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <LoginForm />
+    </main>
+  )
 }
