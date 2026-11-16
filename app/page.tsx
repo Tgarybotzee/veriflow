@@ -1142,7 +1142,7 @@ export default function HomePage() {
                 <h2 className="text-sm font-semibold">Devices</h2>
               </div>
               <span className="flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[10px] font-medium text-violet-300" title="Total numbers across all SIMs">
-                <Sim className="h-3 w-3" />
+                <Smartphone className="h-3 w-3" />
                 {totalNumbers} numbers
               </span>
             </div>
