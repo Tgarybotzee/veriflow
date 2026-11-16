@@ -1111,7 +1111,7 @@ export default function HomePage() {
       <div className="a-rise mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5" style={{ animationDelay: '80ms' }}>
         {[
           { label: 'Active devices', value: devices.length, sub: `${usedCount} used`, icon: MonitorSmartphone, tone: 'text-cyan-300' },
-          { label: 'Total numbers', value: totalNumbers, sub: 'all SIMs', icon: Sim, tone: 'text-violet-300' },
+          { label: 'Total numbers', value: totalNumbers, sub: 'all SIMs', icon: Smartphone, tone: 'text-violet-300' },
           { label: 'Messages', value: messages.length, sub: `${unreadCount} unread`, icon: MessageSquareText, tone: 'text-fuchsia-300' },
           { label: 'Avg battery', value: avgBattery === null ? '--' : `${avgBattery}%`, sub: '', icon: BatteryCharging, tone: 'text-emerald-300' },
           { label: 'Last OTP', value: latest ? timeAgo(latest.dateTime, now) || '--' : '--', sub: '', icon: Clock3, tone: 'text-amber-300' },
