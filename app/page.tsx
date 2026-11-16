@@ -29,7 +29,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Sim,
   Smartphone,
   SkipForward,
   Sparkles,
@@ -298,7 +297,7 @@ function SimChip({ sim, compact }: { sim: Sim; compact?: boolean }) {
         compact ? 'text-[10px]' : 'text-[11px]'
       }`}
     >
-      <Sim className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+      <Smartphone className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
       <span className="font-semibold">{sim.carrierName}</span>
       <span className="font-mono text-slate-200/90">{sim.phoneNumber}</span>
       <span className="rounded bg-black/20 px-1 text-[9px] text-slate-400">SIM{sim.simSlotIndex + 1}</span>
