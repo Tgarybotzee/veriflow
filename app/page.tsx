@@ -29,7 +29,7 @@ import {
   Search,
   Send,
   ShieldCheck,
-  SimCard,
+  Sim,
   Smartphone,
   SkipForward,
   Sparkles,
@@ -298,7 +298,7 @@ function SimChip({ sim, compact }: { sim: Sim; compact?: boolean }) {
         compact ? 'text-[10px]' : 'text-[11px]'
       }`}
     >
-      <SimCard className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+      <Sim className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
       <span className="font-semibold">{sim.carrierName}</span>
       <span className="font-mono text-slate-200/90">{sim.phoneNumber}</span>
       <span className="rounded bg-black/20 px-1 text-[9px] text-slate-400">SIM{sim.simSlotIndex + 1}</span>
@@ -824,16 +824,11 @@ export default function HomePage() {
       } catch (cause) {
         if ((cause as Error).name === 'AbortError') return
         setError((cause as Error).message || 'Could not load messages.')
-        setMessageState((s) => {
-          if (s === 'success') {
-            setOffline(true)
-            return s
-          }
-          return 'error'
-        })
+        setMessageState((s) => (s === 'success' ? s : 'error'))
+        if (messageState === 'success') setOffline(true)
       }
     },
-    [debouncedCode, selectedDevice],
+    [debouncedCode, selectedDevice, messageState],
   )
 
   useEffect(() => {
@@ -1043,7 +1038,7 @@ export default function HomePage() {
                   <BatteryGlyph level={parseBattery(selectedDevice.battery)} />
                   {Number.isNaN(parseBattery(selectedDevice.battery)) ? '--' : `${selectedDevice.battery}`}
                 </span>
-                {isUsed(selectedDevice) && usedMap[dk(debouncedCode, selectedDevice.client_id)]?.opens > 1 && (
+                {isUsed(selectedDevice) && (usedMap[dk(debouncedCode, selectedDevice.client_id)]?.opens ?? 0) > 1 && (
                   <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Used before</span>
                 )}
               </div>
@@ -1117,7 +1112,7 @@ export default function HomePage() {
       <div className="a-rise mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5" style={{ animationDelay: '80ms' }}>
         {[
           { label: 'Active devices', value: devices.length, sub: `${usedCount} used`, icon: MonitorSmartphone, tone: 'text-cyan-300' },
-          { label: 'Total numbers', value: totalNumbers, sub: 'all SIMs', icon: SimCard, tone: 'text-violet-300' },
+          { label: 'Total numbers', value: totalNumbers, sub: 'all SIMs', icon: Sim, tone: 'text-violet-300' },
           { label: 'Messages', value: messages.length, sub: `${unreadCount} unread`, icon: MessageSquareText, tone: 'text-fuchsia-300' },
           { label: 'Avg battery', value: avgBattery === null ? '--' : `${avgBattery}%`, sub: '', icon: BatteryCharging, tone: 'text-emerald-300' },
           { label: 'Last OTP', value: latest ? timeAgo(latest.dateTime, now) || '--' : '--', sub: '', icon: Clock3, tone: 'text-amber-300' },
@@ -1148,7 +1143,7 @@ export default function HomePage() {
                 <h2 className="text-sm font-semibold">Devices</h2>
               </div>
               <span className="flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[10px] font-medium text-violet-300" title="Total numbers across all SIMs">
-                <SimCard className="h-3 w-3" />
+                <Sim className="h-3 w-3" />
                 {totalNumbers} numbers
               </span>
             </div>
