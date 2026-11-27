@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Activity, BarChart3, ChevronRight, FileText, Globe2, LayoutDashboard, LockKeyhole, Megaphone, Menu, Save, Settings2, ShieldCheck, Users, X, LogOut } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -176,7 +176,24 @@ function PopupEditor() {
   ) 
 }
 
-function LogsPanel({ logs }: { logs: any[] }) { 
+function LocalTimestamp({ value }: { value: string }) {
+  const [localized, setLocalized] = useState('')
+  const date = new Date(value)
+  const isValid = !Number.isNaN(date.getTime())
+  const stableFallback = isValid ? `${date.toISOString().slice(0, 19).replace('T', ' ')} UTC` : value
+
+  useEffect(() => {
+    const currentDate = new Date(value)
+    if (Number.isNaN(currentDate.getTime())) return
+    try {
+      setLocalized(currentDate.toLocaleString())
+    } catch {}
+  }, [value])
+
+  return <time dateTime={isValid ? date.toISOString() : undefined}>{localized || stableFallback}</time>
+}
+
+function LogsPanel({ logs }: { logs: any[] }) {
   return (
     <Card className="border-slate-200 shadow-sm">
       <CardHeader>
@@ -191,7 +208,7 @@ function LogsPanel({ logs }: { logs: any[] }) {
               <FileText className="size-4 text-blue-600" />
               <span className="font-medium text-sm">{log.action}</span>
             </div>
-            <span className="text-xs text-slate-500">{log.admin_email} &middot; {new Date(log.created_at).toLocaleString()}</span>
+            <span className="text-xs text-slate-500">{log.admin_email} &middot; <LocalTimestamp value={log.created_at} /></span>
           </div>
         ))}
       </CardContent>
