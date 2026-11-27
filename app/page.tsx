@@ -135,21 +135,66 @@ const CSS = `
 `
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+function readStorage(key: string): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(key: string, value: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value)
+  } catch {}
+}
+
+function removeStorage(key: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(key)
+  } catch {}
+}
+
+function removeStoragePrefix(prefix: string, exceptKey?: string) {
+  try {
+    if (typeof window === 'undefined') return
+    const keys: string[] = []
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index)
+      if (key?.startsWith(prefix) && key !== exceptKey) keys.push(key)
+    }
+    keys.forEach(removeStorage)
+  } catch {}
+}
+
+function createAbortController(): AbortController | undefined {
+  try {
+    return typeof AbortController === 'undefined' ? undefined : new AbortController()
+  } catch {
+    return undefined
+  }
+}
+
+function requestFailureMessage(cause: unknown, fallback: string) {
+  const error = cause as Error
+  if (error?.name === 'TypeError' || /failed to fetch|networkerror|load failed/i.test(error?.message ?? '')) {
+    return 'Could not reach the API. Check your connection and try again.'
+  }
+  return error?.message || fallback
+}
+
 function usePersisted<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial)
   const [ready, setReady] = useState(false)
   useEffect(() => {
+    const raw = readStorage(key)
     try {
-      const raw = localStorage.getItem(key)
       if (raw) setValue((v) => (typeof v === 'object' && v !== null && !Array.isArray(v) ? { ...v, ...JSON.parse(raw) } : JSON.parse(raw)))
     } catch {}
     setReady(true)
   }, [key])
   useEffect(() => {
-    if (!ready) return
-    try {
-      localStorage.setItem(key, JSON.stringify(value))
-    } catch {}
+    if (ready) writeStorage(key, JSON.stringify(value))
   }, [key, value, ready])
   return [value, setValue, ready] as const
 }
@@ -198,7 +243,12 @@ const parseDate = (v: string) => {
 
 function formatTime(v: string) {
   const d = parseDate(v)
-  return d ? d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : v
+  if (!d) return v
+  try {
+    return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+  }
 }
 
 function timeAgo(v: string, now: number) {
@@ -220,15 +270,39 @@ const spotMove = (e: React.MouseEvent<HTMLElement>) => {
   e.currentTarget.style.setProperty('--y', `${e.clientY - r.top}px`)
 }
 
-async function copyText(text: string, label = 'Copied'): Promise<boolean> {
+async function writeClipboard(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text)
-    toast.success(label, { icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" /> })
-    return true
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {}
+
+  try {
+    if (typeof document === 'undefined' || !document.body || typeof document.execCommand !== 'function') return false
+    const input = document.createElement('textarea')
+    input.value = text
+    input.setAttribute('readonly', '')
+    input.setAttribute('aria-hidden', 'true')
+    input.style.position = 'fixed'
+    input.style.opacity = '0'
+    document.body.appendChild(input)
+    input.select()
+    const copied = document.execCommand('copy')
+    if (input.parentNode) input.parentNode.removeChild(input)
+    return copied
   } catch {
-    toast.error('Copy failed. Long-press the code to copy it.')
     return false
   }
+}
+
+async function copyText(text: string, label = 'Copied'): Promise<boolean> {
+  if (await writeClipboard(text)) {
+    toast.success(label, { icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" /> })
+    return true
+  }
+  toast.error('Copy failed. Long-press the code to copy it.')
+  return false
 }
 
 function beep() {
@@ -625,7 +699,7 @@ export default function HomePage() {
   const [senderFilter, setSenderFilter] = useState('all')
   const [deviceFilter, setDeviceFilter] = useState<DeviceFilter>('all')
   const [freshIds, setFreshIds] = useState<string[]>([])
-  const [now, setNow] = useState(() => Date.now())
+  const [now, setNow] = useState(0)
 
   const abortRef = useRef<AbortController | null>(null)
   const seenRef = useRef<Set<string> | null>(null)
@@ -641,6 +715,7 @@ export default function HomePage() {
 
   // clock
   useEffect(() => {
+    setNow(Date.now())
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [])
@@ -661,7 +736,7 @@ export default function HomePage() {
     if (!prefsReady) return
     let last = 0
     try {
-      last = Number(localStorage.getItem(LS.tg) || 0)
+      last = Number(readStorage(LS.tg) || 0)
     } catch {}
     if (Date.now() - last < TG_POPUP_COOLDOWN_MS) return
     const t = setTimeout(() => setTgOpen(true), TG_POPUP_DELAY_MS)
@@ -670,7 +745,7 @@ export default function HomePage() {
   const closeTg = useCallback(() => {
     setTgOpen(false)
     try {
-      localStorage.setItem(LS.tg, String(Date.now()))
+      writeStorage(LS.tg, String(Date.now()))
     } catch {}
   }, [])
 
@@ -730,7 +805,7 @@ export default function HomePage() {
     if (!prefsReady || !debouncedCode) return
     let cached: Device[] | null = null
     try {
-      const raw = localStorage.getItem(LS.devPrefix + debouncedCode)
+      const raw = readStorage(LS.devPrefix + debouncedCode)
       if (raw) cached = JSON.parse(raw)
     } catch {}
     if (cached && cached.length) {
@@ -760,12 +835,10 @@ export default function HomePage() {
         setDeviceState('success')
         setOffline(false)
         setLastUpdated(new Date())
-        try {
-          localStorage.setItem(LS.devPrefix + debouncedCode, JSON.stringify(active))
-        } catch {}
+        writeStorage(LS.devPrefix + debouncedCode, JSON.stringify(active))
       } catch (cause) {
         if ((cause as Error).name === 'AbortError') return
-        const msg = (cause as Error).message || 'Could not connect to the API.'
+        const msg = requestFailureMessage(cause, 'Could not connect to the API.')
         if (devicesRef.current.length > 0 && msg !== 'Database code not found.') {
           setOffline(true) // keep showing cached numbers
         } else {
@@ -809,9 +882,9 @@ export default function HomePage() {
             const top = added[0]
             const code = extractOtp(top.message)
             if (soundRef.current) beep()
-            if (code && autoCopyRef.current) navigator.clipboard.writeText(code).catch(() => {})
+            const copied = Boolean(code && autoCopyRef.current && await writeClipboard(code))
             toast(`New OTP from ${top.sender}`, {
-              description: code ? `Code ${code}${autoCopyRef.current ? ' (copied)' : ''}` : top.message.slice(0, 60),
+              description: code ? `Code ${code}${copied ? ' (copied)' : ''}` : top.message.slice(0, 60),
               icon: <BellRing className="h-4 w-4 text-cyan-300" />,
             })
           }
@@ -822,7 +895,7 @@ export default function HomePage() {
         setLastUpdated(new Date())
       } catch (cause) {
         if ((cause as Error).name === 'AbortError') return
-        setError((cause as Error).message || 'Could not load messages.')
+        setError(requestFailureMessage(cause, 'Could not load messages.'))
         setMessageState((s) => (s === 'success' ? s : 'error'))
         if (messageState === 'success') setOffline(true)
       }
@@ -832,10 +905,10 @@ export default function HomePage() {
 
   useEffect(() => {
     abortRef.current?.abort()
-    const c = new AbortController()
-    abortRef.current = c
-    fetchDevices(c.signal)
-    return () => c.abort()
+    const c = createAbortController()
+    abortRef.current = c ?? null
+    fetchDevices(c?.signal)
+    return () => c?.abort()
   }, [fetchDevices])
 
   // reset when device / code changes
@@ -849,9 +922,9 @@ export default function HomePage() {
   }, [selectedId, debouncedCode])
 
   useEffect(() => {
-    const c = new AbortController()
-    fetchMessages(c.signal)
-    return () => c.abort()
+    const c = createAbortController()
+    fetchMessages(c?.signal)
+    return () => c?.abort()
   }, [fetchMessages])
 
   useEffect(() => {
@@ -888,11 +961,7 @@ export default function HomePage() {
   }, [devices, selectedId, usedMap, debouncedCode])
 
   const clearCache = useCallback(() => {
-    try {
-      Object.keys(localStorage)
-        .filter((k) => k.startsWith('sc:') && k !== LS.prefs)
-        .forEach((k) => localStorage.removeItem(k))
-    } catch {}
+    removeStoragePrefix('sc:', LS.prefs)
     setUsedMap({})
     setReadMap({})
     toast.success('Local cache cleared')
